@@ -39,9 +39,9 @@ const corsOptions = {
       'http://localhost:3333',
       'http://127.0.0.1:3333',
       // Add your deployment domains here:
-      // 'https://your-app.vercel.app',
-      // 'https://your-app.pages.dev',
-      // 'https://your-tunnel-url.trycloudflare.com'
+      'https://grocery-assistant-chatbot.vercel.app',
+      'https://grocery-assistant-chatbot-ab5lsjav-vedantshis-projects.vercel.app',
+      'https://quantitative-sticker-rec-toolbox.trycloudflare.com'
     ];
     
     // Also allow any *.vercel.app, *.pages.dev, *.trycloudflare.com domains
