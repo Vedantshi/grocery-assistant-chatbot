@@ -1,6 +1,42 @@
-// Backend URL configuration
-// For local dev: uses relative URLs (same origin)
-// For deployment: set window.env.BACKEND_URL to your Cloudflare Tunnel URL
+// Backend URL configuration (dynamic)
+// Resolution order:
+// 1) URL query param ?backend=<url> (or ?api=<url>) — saved to localStorage
+// 2) localStorage.BACKEND_URL
+// 3) window.env.BACKEND_URL (from index.html)
+// 4) '' (relative to same origin)
+(function resolveBackendURL(){
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const qp = params.get('backend') || params.get('api');
+    const stored = localStorage.getItem('BACKEND_URL');
+    let fromEnv = (window.env && window.env.BACKEND_URL) ? String(window.env.BACKEND_URL) : '';
+
+    let chosen = qp || stored || fromEnv || '';
+
+    // Normalize: trim, remove trailing slash
+    if (typeof chosen === 'string') {
+      chosen = chosen.trim();
+      if (chosen.endsWith('/')) chosen = chosen.slice(0, -1);
+    }
+
+    // Persist query override
+    if (qp) {
+      try { localStorage.setItem('BACKEND_URL', chosen); } catch {}
+    }
+
+    // Reflect the chosen value back to window.env for easy debugging
+    window.env = Object.assign({}, window.env, { BACKEND_URL: chosen });
+
+    if (chosen) {
+      console.info('[Grocerly] Using backend:', chosen);
+    } else {
+      console.info('[Grocerly] Using relative backend (same origin).');
+    }
+  } catch (e) {
+    console.warn('[Grocerly] Failed to resolve BACKEND_URL:', e);
+  }
+})();
+
 const BACKEND_URL = window.env?.BACKEND_URL || '';
 
 const { useState, useEffect, useRef } = React;
