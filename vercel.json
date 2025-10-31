@@ -1,12 +1,8 @@
 {
-  "version": 2,
-  "public": true,
-  "buildCommand": "echo 'No build needed - static files only'",
-  "outputDirectory": "backend/public",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/(.*)",
+      "destination": "/backend/public/$1"
     }
   ],
   "headers": [
