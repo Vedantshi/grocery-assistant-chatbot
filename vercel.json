@@ -6,7 +6,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/backend/public/$1"
+      "dest": "/$1"
     }
   ],
   "headers": [
