@@ -12,6 +12,10 @@ yarn-error.log*
 # Backups
 backups/
 
+# Cloudflare Tunnel
+cloudflared.exe
+cloudflared
+
 # IDE
 .vscode/
 .idea/
