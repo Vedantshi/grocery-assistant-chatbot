@@ -1,0 +1,26 @@
+{
+  "name": "updated-grocery-backend",
+  "version": "1.0.0",
+  "description": "Backend for Updated Grocery Site - loads CSVs and provides chat/recipe APIs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest --testTimeout=10000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.4.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.5",
+    "openai": "^4.56.0"
+  },
+  "devDependencies": {
+    "jest": "^29.6.1",
+    "nodemon": "^2.0.22"
+  }
+}

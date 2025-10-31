@@ -1,0 +1,324 @@
+<!doctype html>
+<html data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Grocerly</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-gradient" aria-hidden="true"></div>
+    <!-- SVG sprite (hidden) -->
+    <svg style="display:none" aria-hidden="true">
+      <!-- Ultra-detailed grocery icons with high contrast -->
+      <symbol id="icon-bread" viewBox="0 0 24 24">
+        <path d="M4 9c0-3 3-5 8-5s8 2 8 5v8a3 3 0 01-3 3H7a3 3 0 01-3-3V9z" fill="currentColor"/>
+        <path d="M6 11h12M6 14h12M6 17h12" stroke="rgba(0,0,0,0.25)" stroke-width="1.2"/>
+        <circle cx="8" cy="8.5" r="0.7" fill="rgba(0,0,0,0.3)"/>
+        <circle cx="16" cy="8.5" r="0.7" fill="rgba(0,0,0,0.3)"/>
+        <circle cx="12" cy="9" r="0.6" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="10" cy="7.5" r="0.5" fill="rgba(0,0,0,0.2)"/>
+        <circle cx="14" cy="7.5" r="0.5" fill="rgba(0,0,0,0.2)"/>
+        <path d="M5 9c0-2 2-3 4-4" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" fill="none"/>
+        <path d="M19 9c0-2-2-3-4-4" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      </symbol>
+      <symbol id="icon-milk" viewBox="0 0 24 24">
+        <path d="M8 3h8l-1 3v13a3 3 0 01-3 3 3 3 0 01-3-3V6L8 3z" fill="currentColor"/>
+        <path d="M9 7h6v2.5H9z" fill="rgba(255,255,255,0.45)"/>
+        <rect x="9.8" y="10.5" width="4.4" height="7" rx="0.8" fill="rgba(255,255,255,0.35)"/>
+        <ellipse cx="10.5" cy="8.2" rx="0.7" ry="1" fill="rgba(255,255,255,0.6)"/>
+        <ellipse cx="13.5" cy="8.2" rx="0.7" ry="1" fill="rgba(255,255,255,0.6)"/>
+        <path d="M9 6v-2.5l3-.5 3 .5V6" stroke="rgba(0,0,0,0.15)" stroke-width="0.7"/>
+        <rect x="10.5" y="12" width="3" height="1.5" rx="0.3" fill="rgba(255,255,255,0.25)"/>
+        <path d="M10 11c0 1 .5 3 2 3s2-2 2-3" stroke="rgba(255,255,255,0.2)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-eggs" viewBox="0 0 24 24">
+        <ellipse cx="9" cy="14" rx="3.8" ry="5.5" fill="currentColor"/>
+        <ellipse cx="15" cy="14" rx="3.8" ry="5.5" fill="currentColor"/>
+        <ellipse cx="9" cy="12.5" rx="1.5" ry="2.2" fill="rgba(255,255,255,0.55)"/>
+        <ellipse cx="15" cy="12.5" rx="1.5" ry="2.2" fill="rgba(255,255,255,0.55)"/>
+        <ellipse cx="8" cy="15.5" rx="0.6" ry="0.9" fill="rgba(255,255,255,0.3)"/>
+        <ellipse cx="14.2" cy="15.5" rx="0.6" ry="0.9" fill="rgba(255,255,255,0.3)"/>
+        <ellipse cx="9.5" cy="13.5" rx="0.4" ry="0.6" fill="rgba(255,255,255,0.4)"/>
+        <ellipse cx="15.5" cy="13.5" rx="0.4" ry="0.6" fill="rgba(255,255,255,0.4)"/>
+        <path d="M9 10c-1.5 1-2 3-2 4.5M15 10c1.5 1 2 3 2 4.5" stroke="rgba(0,0,0,0.08)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-banana" viewBox="0 0 24 24">
+        <path d="M21 6c-2 5-8 9-12 9-2 0-3-1-3-1 1 4 5 5 8 4 4-1 7-5 7-12z" fill="currentColor"/>
+        <path d="M10 10c1.5 0 4-1 6-2" stroke="rgba(0,0,0,0.3)" stroke-width="1.2" fill="none"/>
+        <ellipse cx="19" cy="7" rx="1.5" ry="2.8" fill="rgba(0,0,0,0.3)"/>
+        <ellipse cx="11" cy="12" rx="1" ry="0.7" fill="rgba(0,0,0,0.25)"/>
+        <ellipse cx="14" cy="11" rx="0.8" ry="0.6" fill="rgba(0,0,0,0.2)"/>
+        <ellipse cx="16" cy="9.5" rx="0.7" ry="0.5" fill="rgba(0,0,0,0.18)"/>
+        <path d="M8 13c2-1 5-2 8-3" stroke="rgba(255,255,255,0.25)" stroke-width="0.9" fill="none"/>
+        <path d="M9 11.5c1.5-0.5 4-1.5 6.5-2.5" stroke="rgba(255,255,255,0.2)" stroke-width="0.7" fill="none"/>
+        <ellipse cx="8.5" cy="13.5" rx="0.6" ry="0.4" fill="rgba(0,0,0,0.15)"/>
+      </symbol>
+      <symbol id="icon-tomato" viewBox="0 0 24 24">
+        <circle cx="12" cy="13" r="6.5" fill="currentColor"/>
+        <path d="M9 8l3 2 3-2-2-2h-2l-2 2z" fill="currentColor"/>
+        <ellipse cx="9.5" cy="10.5" rx="2.2" ry="1.6" fill="rgba(255,255,255,0.45)"/>
+        <ellipse cx="14.5" cy="14.5" rx="1.2" ry="0.9" fill="rgba(255,255,255,0.3)"/>
+        <ellipse cx="11" cy="15" rx="0.8" ry="0.6" fill="rgba(255,255,255,0.25)"/>
+        <path d="M9 8c0-.5.5-1 1-1h4c.5 0 1 .5 1 1" stroke="rgba(0,0,0,0.25)" stroke-width="0.8" fill="none"/>
+        <circle cx="12" cy="13" r="4.5" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="0.8"/>
+        <path d="M10.5 7.5l1.5 1.5 1.5-1.5" stroke="rgba(0,0,0,0.2)" stroke-width="0.7" fill="none"/>
+      </symbol>
+      <symbol id="icon-onion" viewBox="0 0 24 24">
+        <path d="M12 4c0 3-6 6-6 12a6 6 0 0012 0C18 10 12 7 12 4z" fill="currentColor"/>
+        <path d="M12 8c-1.8 1.8-3.5 3.5-3.5 7 0 2.8 1.8 5 3.5 6" stroke="rgba(0,0,0,0.25)" stroke-width="1.5" fill="none"/>
+        <path d="M12 10c1.5 1.5 3 3 3 6.5" stroke="rgba(0,0,0,0.18)" stroke-width="1.2" fill="none"/>
+        <circle cx="10" cy="12" r="0.8" fill="rgba(0,0,0,0.3)"/>
+        <circle cx="13.5" cy="14" r="0.6" fill="rgba(0,0,0,0.25)"/>
+        <ellipse cx="10.5" cy="8" rx="1.3" ry="2" fill="rgba(255,255,255,0.25)"/>
+        <ellipse cx="13.5" cy="9" rx="1" ry="1.5" fill="rgba(255,255,255,0.2)"/>
+        <path d="M9 13c.5 1 1 2.5 1 4" stroke="rgba(255,255,255,0.15)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-broccoli" viewBox="0 0 24 24">
+        <circle cx="9" cy="9" r="3.5" fill="currentColor"/>
+        <circle cx="15" cy="8" r="3.5" fill="currentColor"/>
+        <circle cx="12" cy="11.8" r="3" fill="currentColor"/>
+        <path d="M11 15l-1 8h4l-1-8" fill="currentColor" opacity="0.9"/>
+        <circle cx="8.3" cy="8.3" r="1.2" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="15.7" cy="7.3" r="1.2" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="12" cy="11" r="0.9" fill="rgba(255,255,255,0.4)"/>
+        <circle cx="10" cy="9.5" r="0.7" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="14" cy="8.8" r="0.7" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="11.5" cy="13" r="0.5" fill="rgba(255,255,255,0.25)"/>
+        <circle cx="7.5" cy="10" r="0.5" fill="rgba(255,255,255,0.25)"/>
+        <circle cx="13.8" cy="10.2" r="0.5" fill="rgba(255,255,255,0.25)"/>
+        <path d="M11 15c-.3 2-.5 4-.5 6M13 15c.3 2 .5 4 .5 6" stroke="rgba(0,0,0,0.15)" stroke-width="0.8"/>
+      </symbol>
+      <symbol id="icon-oil" viewBox="0 0 24 24">
+        <path d="M10 3h4l1 3v12a3 3 0 01-3 3 3 3 0 01-3-3V6l1-3z" fill="currentColor"/>
+        <rect x="10.3" y="8.5" width="3.4" height="9" rx="1.7" fill="rgba(255,255,255,0.35)"/>
+        <circle cx="12" cy="10.5" r="1.4" fill="rgba(255,255,255,0.55)"/>
+        <ellipse cx="12" cy="13.5" rx="1.1" ry="1.7" fill="rgba(255,255,255,0.45)"/>
+        <ellipse cx="12" cy="15.8" rx="0.9" ry="1.3" fill="rgba(255,255,255,0.35)"/>
+        <path d="M10.5 6h3v2.5h-3z" fill="rgba(0,0,0,0.15)"/>
+        <ellipse cx="11" cy="11" rx="0.5" ry="0.7" fill="rgba(255,255,255,0.4)"/>
+        <ellipse cx="12.5" cy="14" rx="0.4" ry="0.6" fill="rgba(255,255,255,0.3)"/>
+        <path d="M10.5 8c0 1.5.5 3 1.5 4s1.5-2.5 1.5-4" stroke="rgba(255,255,255,0.2)" stroke-width="0.6" fill="none"/>
+      </symbol>
+      <symbol id="icon-rice" viewBox="0 0 24 24">
+        <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+        <path d="M8 10h8M8 13h8M8 16h8" stroke="rgba(0,0,0,0.3)" stroke-width="1.3"/>
+        <rect x="9.5" y="7.5" width="5" height="3.5" rx="0.8" fill="rgba(255,255,255,0.35)"/>
+        <circle cx="9" cy="11" r="0.4" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="11" cy="14" r="0.4" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="14" cy="11.5" r="0.4" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="10" cy="16.5" r="0.4" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="15" cy="14.5" r="0.4" fill="rgba(0,0,0,0.25)"/>
+        <path d="M7 8c0-1 1-1.5 2-1.5h6c1 0 2 .5 2 1.5" stroke="rgba(0,0,0,0.15)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-cheese" viewBox="0 0 24 24">
+        <path d="M3 17l18-7-10-3-8 3v7z" fill="currentColor"/>
+        <circle cx="10" cy="14" r="1.5" fill="rgba(0,0,0,0.35)"/>
+        <circle cx="14" cy="12" r="1.5" fill="rgba(0,0,0,0.35)"/>
+        <circle cx="17" cy="14" r="1.2" fill="rgba(0,0,0,0.3)"/>
+        <circle cx="7" cy="15.5" r="1" fill="rgba(0,0,0,0.3)"/>
+        <circle cx="12" cy="16" r="0.9" fill="rgba(0,0,0,0.28)"/>
+        <circle cx="15.5" cy="15.5" r="0.7" fill="rgba(0,0,0,0.25)"/>
+        <path d="M5 15l16-6" stroke="rgba(0,0,0,0.15)" stroke-width="0.8"/>
+        <path d="M4 16.5l17-6.5" stroke="rgba(0,0,0,0.1)" stroke-width="0.6"/>
+        <ellipse cx="8.5" cy="13" rx="0.8" ry="0.5" fill="rgba(255,255,255,0.2)"/>
+      </symbol>
+      <symbol id="icon-carrot" viewBox="0 0 24 24">
+        <path d="M14 4l-2 2-8 14c-1 1 0 2 1 1l14-8 2-2-7-7z" fill="currentColor"/>
+        <path d="M16 3l2 2M18 2l2 3M15 5l1 2" stroke="currentColor" stroke-width="2" opacity="0.85"/>
+        <path d="M10 10l6 6" stroke="rgba(0,0,0,0.25)" stroke-width="1.4"/>
+        <path d="M8 12l5 5" stroke="rgba(0,0,0,0.18)" stroke-width="1"/>
+        <path d="M11 9l4 4" stroke="rgba(0,0,0,0.15)" stroke-width="0.8"/>
+        <circle cx="9" cy="13" r="0.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="11" cy="15" r="0.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="13" cy="17" r="0.4" fill="rgba(0,0,0,0.2)"/>
+        <path d="M7 14c2 2 4 4 6 5" stroke="rgba(255,255,255,0.2)" stroke-width="0.9" fill="none"/>
+      </symbol>
+      <symbol id="icon-apple" viewBox="0 0 24 24">
+        <circle cx="12" cy="14" r="7" fill="currentColor"/>
+        <path d="M12 7v-3" stroke="currentColor" stroke-width="2" opacity="0.9"/>
+        <path d="M11 4.5c-1-1-3-1-3.5 0.5" stroke="currentColor" stroke-width="1.6" fill="none" opacity="0.9"/>
+        <ellipse cx="9.5" cy="11.5" rx="2.2" ry="3" fill="rgba(255,255,255,0.45)"/>
+        <ellipse cx="14.5" cy="15.5" rx="1.2" ry="1.5" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="9" cy="17" r="0.6" fill="rgba(0,0,0,0.15)"/>
+        <circle cx="14" cy="12" r="0.5" fill="rgba(0,0,0,0.12)"/>
+        <ellipse cx="10.5" cy="13" rx="0.8" ry="1" fill="rgba(255,255,255,0.35)"/>
+        <path d="M8 14c-.5 2 0 4 1 5" stroke="rgba(0,0,0,0.1)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-lettuce" viewBox="0 0 24 24">
+        <path d="M12 5c-4 0-7 2-7 6 0 3 2 8 7 8s7-5 7-8c0-4-3-6-7-6z" fill="currentColor"/>
+        <path d="M10 8c-2.2 1-3.5 3.5-3.5 6M14 8c2.2 1 3.5 3.5 3.5 6" stroke="rgba(0,0,0,0.25)" stroke-width="1.5" fill="none"/>
+        <path d="M11 10c-1.2 0.8-2 2.5-2 4M13 10c1.2 0.8 2 2.5 2 4" stroke="rgba(0,0,0,0.18)" stroke-width="1.1" fill="none"/>
+        <circle cx="10" cy="10" r="1.1" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="14" cy="10" r="1.1" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="12" cy="13.5" r="0.7" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="9" cy="12.5" r="0.6" fill="rgba(255,255,255,0.25)"/>
+        <circle cx="15" cy="12.5" r="0.6" fill="rgba(255,255,255,0.25)"/>
+        <path d="M11.5 11c-.8 1-1 2.5-1 4M12.5 11c.8 1 1 2.5 1 4" stroke="rgba(255,255,255,0.15)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-strawberry" viewBox="0 0 24 24">
+        <path d="M12 6c-3 0-6 2-6 6 0 4 3 8 6 8s6-4 6-8c0-4-3-6-6-6z" fill="currentColor"/>
+        <path d="M9 5l3 1 3-1-1-2h-4l-1 2z" fill="currentColor" opacity="0.9"/>
+        <circle cx="10" cy="10" r="0.5" fill="rgba(255,255,200,1)"/>
+        <circle cx="14" cy="11" r="0.5" fill="rgba(255,255,200,1)"/>
+        <circle cx="12" cy="13" r="0.5" fill="rgba(255,255,200,1)"/>
+        <circle cx="10.5" cy="15" r="0.5" fill="rgba(255,255,200,1)"/>
+        <circle cx="13.5" cy="14" r="0.5" fill="rgba(255,255,200,1)"/>
+        <circle cx="11.5" cy="17" r="0.4" fill="rgba(255,255,200,1)"/>
+        <circle cx="8.5" cy="12" r="0.4" fill="rgba(255,255,200,1)"/>
+        <circle cx="15" cy="13.5" r="0.4" fill="rgba(255,255,200,1)"/>
+        <ellipse cx="10.5" cy="8.5" rx="1.3" ry="0.9" fill="rgba(255,255,255,0.4)"/>
+        <path d="M9 5.5c-.5-.5-1-1-1-1.5M15 5.5c.5-.5 1-1 1-1.5M12 5v-2" stroke="currentColor" stroke-width="1.2" opacity="0.8"/>
+      </symbol>
+      <symbol id="icon-pepper" viewBox="0 0 24 24">
+        <path d="M12 5c-4 0-5 3-5 7 0 4 2 7 5 7s5-3 5-7c0-4-1-7-5-7z" fill="currentColor"/>
+        <path d="M11 5v-2c0-1 2-1 2 0v2" stroke="currentColor" stroke-width="2" opacity="0.85" fill="none"/>
+        <ellipse cx="10" cy="9.5" rx="1.8" ry="2.5" fill="rgba(255,255,255,0.4)"/>
+        <ellipse cx="13.5" cy="13" rx="1" ry="1.5" fill="rgba(255,255,255,0.25)"/>
+        <path d="M12 8c-1.8 0-3 2.5-3 6" stroke="rgba(0,0,0,0.2)" stroke-width="1.1" fill="none"/>
+        <path d="M12 10c1.5 0 2.5 2 2.5 5" stroke="rgba(255,255,255,0.15)" stroke-width="0.9" fill="none"/>
+        <circle cx="11" cy="15" r="0.5" fill="rgba(255,255,255,0.3)"/>
+      </symbol>
+      <symbol id="icon-corn" viewBox="0 0 24 24">
+        <path d="M9 6c0-2 1-3 3-3s3 1 3 3v10c0 2-1 3-3 3s-3-1-3-3V6z" fill="currentColor"/>
+        <path d="M9 8h6M9 11h6M9 14h6M9 17h6" stroke="rgba(0,0,0,0.3)" stroke-width="1.3"/>
+        <circle cx="10.5" cy="9" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="13.5" cy="9" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="10.5" cy="12" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="13.5" cy="12" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="10.5" cy="15" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="13.5" cy="15" r="0.6" fill="rgba(255,255,200,1)"/>
+        <circle cx="12" cy="10" r="0.5" fill="rgba(255,255,200,0.9)"/>
+        <circle cx="12" cy="13" r="0.5" fill="rgba(255,255,200,0.9)"/>
+        <circle cx="12" cy="16" r="0.5" fill="rgba(255,255,200,0.9)"/>
+        <path d="M8 5l-1.5-2.5M16 5l1.5-2.5M8 4.5l-2.5-1M16 4.5l2.5-1" stroke="currentColor" stroke-width="1.5" opacity="0.8"/>
+        <path d="M9.5 6c0-1 .8-2 2.5-2s2.5 1 2.5 2" stroke="rgba(0,0,0,0.15)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-orange" viewBox="0 0 24 24">
+        <circle cx="12" cy="13" r="7" fill="currentColor"/>
+        <path d="M12 6v-2" stroke="currentColor" stroke-width="1.5" opacity="0.8"/>
+        <circle cx="12" cy="13" r="5" fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="1"/>
+        <path d="M12 8v10M7 13h10" stroke="rgba(0,0,0,0.2)" stroke-width="1.1"/>
+        <circle cx="9.5" cy="10.5" r="0.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="14.5" cy="14.5" r="0.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="10" cy="15" r="0.4" fill="rgba(0,0,0,0.2)"/>
+        <ellipse cx="10" cy="11" rx="1.5" ry="2" fill="rgba(255,255,255,0.35)"/>
+        <ellipse cx="14" cy="14" rx="1" ry="1.3" fill="rgba(255,255,255,0.25)"/>
+        <path d="M8 10c1 1.5 1.5 3 1.5 4.5M16 10c-1 1.5-1.5 3-1.5 4.5" stroke="rgba(0,0,0,0.1)" stroke-width="0.8" fill="none"/>
+      </symbol>
+      <symbol id="icon-mushroom" viewBox="0 0 24 24">
+        <path d="M6 12c0-4 2-7 6-7s6 3 6 7H6z" fill="currentColor"/>
+        <rect x="10" y="12" width="4" height="8" rx="1.2" fill="currentColor" opacity="0.9"/>
+        <circle cx="9" cy="10" r="1.2" fill="rgba(255,255,255,0.5)"/>
+        <circle cx="15" cy="10" r="1.2" fill="rgba(255,255,255,0.5)"/>
+        <circle cx="12" cy="9" r="1" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="10.5" cy="11" r="0.7" fill="rgba(255,255,255,0.35)"/>
+        <circle cx="13.5" cy="11" r="0.7" fill="rgba(255,255,255,0.35)"/>
+        <path d="M10.5 14h3v4h-3z" fill="rgba(0,0,0,0.15)"/>
+        <path d="M7 12c0-3 1.5-5.5 5-5.5s5 2.5 5 5.5" stroke="rgba(0,0,0,0.1)" stroke-width="0.8" fill="none"/>
+        <ellipse cx="11.5" cy="15" rx="0.4" ry="0.8" fill="rgba(255,255,255,0.2)"/>
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M10 2a8 8 0 105.3 14.1l4.3 4.3 1.4-1.4-4.3-4.3A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4z"/>
+      </symbol>
+    </svg>
+
+  <!-- Animated grocery background - 3 parallax layers with 4x the original products -->
+    <div class="bg-produce" aria-hidden="true">
+      <!-- Layer 1: slow - 20 items -->
+      <div class="layer1">
+        <svg class="produce p-lg" style="left:4%; top:24%; animation-delay:-6s"><use href="#icon-bread"/></svg>
+        <svg class="produce p-xl banana" style="left:12%; top:66%; animation-delay:-2s"><use href="#icon-banana"/></svg>
+        <svg class="produce p-lg oil" style="left:46%; top:60%; animation-delay:-3s"><use href="#icon-oil"/></svg>
+        <svg class="produce p-xl" style="left:92%; top:18%; animation-delay:-1s"><use href="#icon-rice"/></svg>
+        <svg class="produce p-lg" style="left:52%; top:84%; animation-delay:-7s"><use href="#icon-bread"/></svg>
+        <svg class="produce p-xl apple" style="left:68%; top:22%; animation-delay:-4s"><use href="#icon-apple"/></svg>
+        <svg class="produce p-lg carrot" style="left:25%; top:42%; animation-delay:-8s"><use href="#icon-carrot"/></svg>
+        <svg class="produce p-lg lettuce" style="left:78%; top:72%; animation-delay:-5s"><use href="#icon-lettuce"/></svg>
+        <svg class="produce p-xl" style="left:34%; top:8%; animation-delay:-9s"><use href="#icon-onion"/></svg>
+        <svg class="produce p-lg" style="left:88%; top:48%; animation-delay:-3s"><use href="#icon-tomato"/></svg>
+        <svg class="produce p-md strawberry" style="left:16%; top:14%; animation-delay:-11s"><use href="#icon-strawberry"/></svg>
+        <svg class="produce p-xl pepper" style="left:58%; top:38%; animation-delay:-10s"><use href="#icon-pepper"/></svg>
+        <svg class="produce p-lg corn" style="left:42%; top:78%; animation-delay:-4s"><use href="#icon-corn"/></svg>
+        <svg class="produce p-md orange" style="left:72%; top:54%; animation-delay:-12s"><use href="#icon-orange"/></svg>
+        <svg class="produce p-lg mushroom" style="left:8%; top:88%; animation-delay:-6s"><use href="#icon-mushroom"/></svg>
+        <svg class="produce p-xl" style="left:28%; top:58%; animation-delay:-9s"><use href="#icon-milk"/></svg>
+        <svg class="produce p-md cheese" style="left:82%; top:8%; animation-delay:-5s"><use href="#icon-cheese"/></svg>
+        <svg class="produce p-lg" style="left:64%; top:92%; animation-delay:-8s"><use href="#icon-eggs"/></svg>
+        <svg class="produce p-xl apple" style="left:48%; top:28%; animation-delay:-7s"><use href="#icon-apple"/></svg>
+        <svg class="produce p-md" style="left:96%; top:78%; animation-delay:-11s"><use href="#icon-broccoli"/></svg>
+      </div>
+      <!-- Layer 2: medium - 20 items -->
+      <div class="layer2">
+        <svg class="produce p-md" style="left:22%; top:18%; animation-delay:-8s"><use href="#icon-eggs"/></svg>
+        <svg class="produce p-lg" style="left:30%; top:74%; animation-delay:-4s"><use href="#icon-broccoli"/></svg>
+        <svg class="produce p-md banana" style="left:64%; top:44%; animation-delay:-7s"><use href="#icon-banana"/></svg>
+        <svg class="produce p-md" style="left:80%; top:26%; animation-delay:-9s"><use href="#icon-broccoli"/></svg>
+        <svg class="produce p-lg cheese" style="left:85%; top:80%; animation-delay:-4s"><use href="#icon-cheese"/></svg>
+        <svg class="produce p-lg apple" style="left:42%; top:52%; animation-delay:-6s"><use href="#icon-apple"/></svg>
+        <svg class="produce p-md lettuce" style="left:58%; top:12%; animation-delay:-10s"><use href="#icon-lettuce"/></svg>
+        <svg class="produce p-xl carrot" style="left:14%; top:48%; animation-delay:-5s"><use href="#icon-carrot"/></svg>
+        <svg class="produce p-md" style="left:70%; top:64%; animation-delay:-7s"><use href="#icon-rice"/></svg>
+        <svg class="produce p-lg" style="left:2%; top:82%; animation-delay:-11s"><use href="#icon-milk"/></svg>
+        <svg class="produce p-xl strawberry" style="left:48%; top:6%; animation-delay:-12s"><use href="#icon-strawberry"/></svg>
+        <svg class="produce p-lg pepper" style="left:92%; top:52%; animation-delay:-8s"><use href="#icon-pepper"/></svg>
+        <svg class="produce p-md corn" style="left:36%; top:88%; animation-delay:-10s"><use href="#icon-corn"/></svg>
+        <svg class="produce p-xl orange" style="left:8%; top:28%; animation-delay:-6s"><use href="#icon-orange"/></svg>
+        <svg class="produce p-lg mushroom" style="left:76%; top:38%; animation-delay:-9s"><use href="#icon-mushroom"/></svg>
+        <svg class="produce p-md" style="left:52%; top:72%; animation-delay:-5s"><use href="#icon-onion"/></svg>
+        <svg class="produce p-lg" style="left:24%; top:62%; animation-delay:-11s"><use href="#icon-tomato"/></svg>
+        <svg class="produce p-xl oil" style="left:66%; top:22%; animation-delay:-7s"><use href="#icon-oil"/></svg>
+        <svg class="produce p-md banana" style="left:88%; top:92%; animation-delay:-4s"><use href="#icon-banana"/></svg>
+        <svg class="produce p-lg" style="left:4%; top:8%; animation-delay:-13s"><use href="#icon-bread"/></svg>
+      </div>
+      <!-- Layer 3: fast - 32 items -->
+      <div class="layer3">
+        <svg class="produce p-md" style="left:38%; top:28%; animation-delay:-10s"><use href="#icon-tomato"/></svg>
+        <svg class="produce p-xl" style="left:56%; top:16%; animation-delay:-12s"><use href="#icon-milk"/></svg>
+        <svg class="produce p-lg" style="left:72%; top:76%; animation-delay:-5s"><use href="#icon-onion"/></svg>
+        <svg class="produce p-lg cheese" style="left:86%; top:58%; animation-delay:-11s"><use href="#icon-cheese"/></svg>
+        <svg class="produce p-md" style="left:18%; top:88%; animation-delay:-6s"><use href="#icon-milk"/></svg>
+        <svg class="produce p-lg" style="left:74%; top:8%; animation-delay:-4s"><use href="#icon-tomato"/></svg>
+        <svg class="produce p-md" style="left:8%; top:8%; animation-delay:-9s"><use href="#icon-eggs"/></svg>
+        <svg class="produce p-lg oil" style="left:6%; top:54%; animation-delay:-12s"><use href="#icon-oil"/></svg>
+        <svg class="produce p-xl apple" style="left:44%; top:68%; animation-delay:-7s"><use href="#icon-apple"/></svg>
+        <svg class="produce p-lg lettuce" style="left:28%; top:36%; animation-delay:-8s"><use href="#icon-lettuce"/></svg>
+        <svg class="produce p-md carrot" style="left:50%; top:92%; animation-delay:-10s"><use href="#icon-carrot"/></svg>
+        <svg class="produce p-lg" style="left:82%; top:42%; animation-delay:-5s"><use href="#icon-broccoli"/></svg>
+        <svg class="produce p-md banana" style="left:12%; top:28%; animation-delay:-13s"><use href="#icon-banana"/></svg>
+        <svg class="produce p-xl" style="left:62%; top:84%; animation-delay:-6s"><use href="#icon-bread"/></svg>
+        <svg class="produce p-md" style="left:94%; top:12%; animation-delay:-9s"><use href="#icon-eggs"/></svg>
+        <svg class="produce p-lg" style="left:36%; top:4%; animation-delay:-11s"><use href="#icon-rice"/></svg>
+        <svg class="produce p-xl strawberry" style="left:20%; top:64%; animation-delay:-14s"><use href="#icon-strawberry"/></svg>
+        <svg class="produce p-md pepper" style="left:78%; top:24%; animation-delay:-8s"><use href="#icon-pepper"/></svg>
+        <svg class="produce p-lg corn" style="left:46%; top:48%; animation-delay:-12s"><use href="#icon-corn"/></svg>
+        <svg class="produce p-xl orange" style="left:88%; top:72%; animation-delay:-7s"><use href="#icon-orange"/></svg>
+        <svg class="produce p-md mushroom" style="left:32%; top:82%; animation-delay:-10s"><use href="#icon-mushroom"/></svg>
+        <svg class="produce p-lg apple" style="left:68%; top:34%; animation-delay:-9s"><use href="#icon-apple"/></svg>
+        <svg class="produce p-xl" style="left:14%; top:44%; animation-delay:-11s"><use href="#icon-bread"/></svg>
+        <svg class="produce p-md lettuce" style="left:52%; top:58%; animation-delay:-6s"><use href="#icon-lettuce"/></svg>
+        <svg class="produce p-lg carrot" style="left:92%; top:88%; animation-delay:-13s"><use href="#icon-carrot"/></svg>
+        <svg class="produce p-xl" style="left:24%; top:12%; animation-delay:-5s"><use href="#icon-milk"/></svg>
+        <svg class="produce p-md cheese" style="left:58%; top:72%; animation-delay:-8s"><use href="#icon-cheese"/></svg>
+        <svg class="produce p-lg banana" style="left:84%; top:18%; animation-delay:-14s"><use href="#icon-banana"/></svg>
+        <svg class="produce p-xl strawberry" style="left:4%; top:38%; animation-delay:-7s"><use href="#icon-strawberry"/></svg>
+        <svg class="produce p-md pepper" style="left:40%; top:94%; animation-delay:-10s"><use href="#icon-pepper"/></svg>
+        <svg class="produce p-lg corn" style="left:96%; top:48%; animation-delay:-9s"><use href="#icon-corn"/></svg>
+        <svg class="produce p-md orange" style="left:76%; top:62%; animation-delay:-12s"><use href="#icon-orange"/></svg>
+      </div>
+    </div>
+
+  <div id="root"></div>
+
+    <!-- React + Babel via CDN (fast for prototype, no build) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel" src="app.js"></script>
+  </body>
+</html>
+ 
