@@ -1,3 +1,8 @@
+// Backend URL configuration
+// For local dev: uses relative URLs (same origin)
+// For deployment: set window.env.BACKEND_URL to your Cloudflare Tunnel URL
+const BACKEND_URL = window.env?.BACKEND_URL || '';
+
 const { useState, useEffect, useRef } = React;
 
 // Toast helper
@@ -27,7 +32,7 @@ function Products(){
   const [products, setProducts] = useState([]);
   const [q, setQ] = useState('');
   const inputRef = useRef(null);
-  useEffect(()=>{ (async ()=>{ try { const r = await axios.get('/api/products'); setProducts(r.data||[]);} catch(e){ console.error(e);} })(); },[]);
+  useEffect(()=>{ (async ()=>{ try { const r = await axios.get(`${BACKEND_URL}/api/products`); setProducts(r.data||[]);} catch(e){ console.error(e);} })(); },[]);
   useEffect(()=>{
     function onKey(e){
       if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); inputRef.current?.focus(); }
@@ -88,7 +93,7 @@ function Chat({onAddToList}){
   useEffect(() => {
     async function fetchWelcome() {
       try {
-        const res = await axios.get('/api/welcome');
+        const res = await axios.get(`${BACKEND_URL}/api/welcome`);
         setMessages([{ from: 'bot', text: res.data.greeting }]);
         setMascot(res.data.mascot || mascot);
       } catch {
@@ -112,7 +117,7 @@ function Chat({onAddToList}){
     setMessages(m=>[...m,user]);
     try {
       const sessionId = localStorage.getItem('sessionId');
-      const res = await axios.post('/api/chat', { message: userText, sessionId });
+      const res = await axios.post(`${BACKEND_URL}/api/chat`, { message: userText, sessionId });
       if (res.data.sessionId) localStorage.setItem('sessionId', res.data.sessionId);
       setMessages(m=>[...m, {from:'bot', text: res.data.reply, recipes: res.data.recipes}]);
     } catch (error) {
@@ -155,7 +160,7 @@ function Chat({onAddToList}){
                     setIsLoading(true);
                     try {
                       const sid = localStorage.getItem('sessionId');
-                      const res = await axios.post('/api/chat', { message: 'more', sessionId: sid });
+                      const res = await axios.post(`${BACKEND_URL}/api/chat`, { message: 'more', sessionId: sid });
                       if (res.data.sessionId) localStorage.setItem('sessionId', res.data.sessionId);
                       setMessages(m=>[...m, { from:'bot', text: res.data.reply, recipes: res.data.recipes }]);
                     } catch (error) {

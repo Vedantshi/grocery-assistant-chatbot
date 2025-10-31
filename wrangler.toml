@@ -1,0 +1,6 @@
+# Cloudflare Pages configuration
+name = "grocery-assistant"
+compatibility_date = "2025-10-31"
+
+[site]
+bucket = "./backend/public"

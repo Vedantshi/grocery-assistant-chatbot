@@ -311,14 +311,21 @@
 
   <div id="root"></div>
 
-    <!-- React + Babel via CDN (fast for prototype, no build) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script type="text/babel" src="app.js"></script>
+  <!-- Environment configuration for deployment -->
+  <!-- Replace BACKEND_URL with your Cloudflare Tunnel URL when deploying -->
+  <script>
+    window.env = {
+      BACKEND_URL: '' // Leave empty for local dev, set to 'https://your-tunnel-url' for deployment
+    };
+  </script>
+
+  <script type="text/babel" src="app.js"></script>
   </body>
 </html>
  
