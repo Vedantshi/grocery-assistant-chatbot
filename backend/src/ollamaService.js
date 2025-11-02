@@ -223,7 +223,11 @@ async function chatWithOpenAI(message, context = [], recipes = [], products = []
     try {
         // Lazy import to avoid requiring when not needed
         const OpenAI = require('openai');
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        // Allow OpenAI-compatible providers via custom base URL
+        const openai = new OpenAI({ 
+            apiKey: process.env.OPENAI_API_KEY, 
+            baseURL: process.env.OPENAI_BASE_URL || undefined 
+        });
 
         const messages = [ { role: 'system', content: SYSTEM_PROMPT } ];
         if (Array.isArray(context) && context.length > 0) {
@@ -262,7 +266,10 @@ async function chatWithOpenAI(message, context = [], recipes = [], products = []
 async function suggestWithOpenAI({ message, context = [], recipeCatalog = [], productList = [], avoidNames = [], groundedMode = false, requestedCount = 3 }) {
     try {
         const OpenAI = require('openai');
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const openai = new OpenAI({ 
+            apiKey: process.env.OPENAI_API_KEY,
+            baseURL: process.env.OPENAI_BASE_URL || undefined
+        });
 
         const recipeCount = requestedCount || 3;
         let system = SYSTEM_PROMPT + `\n\nWhen the user asks for recipes, respond with STRICT JSON (no markdown) in this schema and generate exactly ${recipeCount} ${recipeCount === 1 ? 'recipe' : 'recipes'}:\n{
