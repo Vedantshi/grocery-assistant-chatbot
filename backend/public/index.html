@@ -321,7 +321,9 @@
   <!-- Replace BACKEND_URL with your Cloudflare Tunnel URL when deploying -->
   <script>
     window.env = {
-        BACKEND_URL: 'https://convention-ann-sent-responsibility.trycloudflare.com' // Cloudflare Tunnel URL
+        // For local development, leave this empty to use same-origin (http://127.0.0.1:3333)
+        // For deployment via Cloudflare Tunnel, set to your https://*.trycloudflare.com URL
+        BACKEND_URL: ''
     };
   </script>
 

@@ -231,8 +231,8 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const port = process.env.PORT || 3333;
-// bind to IPv4 loopback explicitly to avoid IPv6/::1 resolution issues on some Windows setups
-const host = process.env.HOST || '127.0.0.1';
+// For cloud deployment, bind to 0.0.0.0 (all interfaces). For local dev, use 127.0.0.1
+const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 try {
     const server = app.listen(port, host, () => {
