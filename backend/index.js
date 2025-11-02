@@ -27,45 +27,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const app = express();
 
-// CORS configuration for deployment
-// Allows requests from your hosting domain and Cloudflare Tunnel
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, postman)
-    if (!origin) return callback(null, true);
-    
-    // Allowed origins
-    const allowedOrigins = [
-      'http://localhost:3333',
-      'http://127.0.0.1:3333',
-      // Add your deployment domains here:
-      'https://grocery-assistant-chatbot.vercel.app',
-      'https://grocery-assistant-chatbot-ab5lsjav-vedantshis-projects.vercel.app',
-      'https://quantitative-sticker-rec-toolbox.trycloudflare.com'
-    ];
-    
-    // Also allow any *.vercel.app, *.pages.dev, *.trycloudflare.com domains
-    const allowedPatterns = [
-      /\.vercel\.app$/,
-      /\.pages\.dev$/,
-      /\.trycloudflare\.com$/
-    ];
-    
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      allowedPatterns.some(pattern => pattern.test(new URL(origin).hostname));
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn('CORS blocked origin:', origin);
-      callback(null, false); // Don't reject, just deny CORS
-    }
-  },
+// CORS configuration for deployment - Allow all origins for now
+app.use(cors({
+  origin: true,
   credentials: true,
   optionsSuccessStatus: 200
-};
-
-app.use(cors(corsOptions));
+}));
 app.use(express.json({ charset: 'utf-8' }));
 app.use(express.urlencoded({ extended: true, charset: 'utf-8' }));
 
