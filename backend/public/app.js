@@ -462,6 +462,28 @@ function App(){
         </div>
       </div>
       <p className="footer-note"><small>Fresh picks, local CSVs.</small></p>
+      {/* Quick control to change backend URL without redeploy */}
+      <button
+        onClick={() => {
+          try {
+            const current = (window.env && window.env.BACKEND_URL) || localStorage.getItem('BACKEND_URL') || '';
+            const entered = window.prompt('Set backend URL (e.g. https://your-tunnel.trycloudflare.com)', current);
+            if (entered === null) return; // cancelled
+            let v = String(entered || '').trim();
+            if (v.endsWith('/')) v = v.slice(0, -1);
+            try { localStorage.setItem('BACKEND_URL', v); } catch {}
+            window.env = Object.assign({}, window.env, { BACKEND_URL: v });
+            if (window.showToast) window.showToast(v ? 'Backend URL saved. Reloading…' : 'Cleared backend URL. Reloading…');
+            setTimeout(() => window.location.reload(), 250);
+          } catch (e) { console.warn('Failed to set backend URL', e); }
+        }}
+        aria-label="Set backend URL"
+        title="Set backend URL"
+        style={{ position:'fixed', bottom: 132, right: 16, zIndex: 1000 }}
+        className="btn btn-accent"
+      >
+        🔌
+      </button>
       <button 
         className="theme-toggle-fixed" 
         onClick={toggleTheme}
