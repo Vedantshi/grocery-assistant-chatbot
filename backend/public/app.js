@@ -98,13 +98,32 @@ function Products(){
       </div>
       <div className="scroll-area list-area" style={{marginTop:12}}>
         {filtered.length===0 ? <p className="subtle">No products</p> : (
-          <table className="table">
-            <thead><tr><th align="left">Item</th><th align="left">Category</th><th className="price-col">Price</th><th className="add-col"></th></tr></thead>
+          <table className="table products-table">
+            <colgroup>
+              <col className="col-item" />
+              <col className="col-category" />
+              <col className="col-unit" />
+              <col className="col-calories" />
+              <col className="col-price" />
+              <col className="col-add" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th align="left">Item</th>
+                <th align="left">Category</th>
+                <th align="left">Unit</th>
+                <th align="right">Calories</th>
+                <th className="price-col">Price</th>
+                <th className="add-col"></th>
+              </tr>
+            </thead>
             <tbody>
               {filtered.map((p,i)=> (
                 <tr key={i}>
                   <td>{p.item}</td>
                   <td>{p.category}</td>
+                  <td>{p.unit || '-'}</td>
+                  <td align="right">{Number.isFinite(p?.nutrition?.calories) ? `${Math.round(p.nutrition.calories)} kcal` : '-'}</td>
                   <td className="price-col">${(p.price||0).toFixed(2)}</td>
                   <td className="add-col">
                     <button className="btn btn-ghost btn-small" aria-label={`Add ${p.item}`} onClick={()=>addProductToCart(p)} style={{borderRadius:'50%', width:'32px', height:'32px', padding:'0', fontSize:'18px'}}>+</button>
@@ -123,8 +142,21 @@ function Chat({onAddToList}){
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [mascot, setMascot] = useState({ name: 'Bloom', emoji: '🌱', tagline: '' });
+  const [thinkingSteps, setThinkingSteps] = useState([]);
+  const [mascot, setMascot] = useState({ name: 'Sage', emoji: '🌿', tagline: '' });
+  const [showQuickOptions, setShowQuickOptions] = useState(true);
   const areaRef = useRef(null);
+
+  // Quick search suggestions
+  const quickOptions = [
+    { label: '🍽️ Full Day Menu', query: '__DAILY_MENU_START__' },
+    { label: '🥗 Meal Prep', query: '__MEAL_PREP_START__' },
+    { label: '📊 Nutrition Coach', query: '__NUTRITION_START__' },
+    { label: '💰 Budget Planner', query: '__BUDGET_START__' },
+    { label: '⏱️ Time Saver', query: '__TIME_START__' },
+    { label: '🧺 Pantry Helper', query: '__PANTRY_START__' },
+    { label: '🌿 Healthy Options', query: '__HEALTHY_START__' },
+  ];
 
   useEffect(() => {
     async function fetchWelcome() {
@@ -133,7 +165,7 @@ function Chat({onAddToList}){
         setMessages([{ from: 'bot', text: res.data.greeting }]);
         setMascot(res.data.mascot || mascot);
       } catch {
-        setMessages([{ from: 'bot', text: "Hi! I'm Bloom 🌱, your friendly grocery helper. What occasion are you shopping for today?" }]);
+        setMessages([{ from: 'bot', text: "Hi! I'm Sage �, your friendly grocery helper. What occasion are you shopping for today?" }]);
       }
     }
     fetchWelcome();
@@ -142,26 +174,100 @@ function Chat({onAddToList}){
   useEffect(()=>{
     if (!areaRef.current) return;
     areaRef.current.scrollTop = areaRef.current.scrollHeight;
-  }, [messages, isLoading]);
+  }, [messages, isLoading, thinkingSteps]);
 
-  async function send(){
-    if(!text.trim() || isLoading) return;
-    const userText = text.trim();
+  async function send(queryText){
+    const messageToSend = queryText || text.trim();
+    if(!messageToSend || isLoading) return;
+    
+    // Hide quick options after first message
+    setShowQuickOptions(false);
+    
     setText('');
     setIsLoading(true);
-    const user = {from:'user', text: userText}; 
+    setThinkingSteps([]);
+    const user = {from:'user', text: messageToSend}; 
     setMessages(m=>[...m,user]);
+    
+    // Generate dynamic thinking steps based on the query
+    function generateThinkingSteps(query) {
+      const lowerQuery = query.toLowerCase();
+      const steps = ['🔍 Understanding your request...'];
+      
+      // Detect query type and add relevant steps
+      if (lowerQuery.includes('budget') || lowerQuery.includes('cheap') || lowerQuery.includes('afford') || lowerQuery.includes('$') || lowerQuery.includes('price')) {
+        steps.push('💰 Analyzing budget constraints...');
+        steps.push('📊 Filtering cost-effective options...');
+      }
+      
+      if (lowerQuery.includes('healthy') || lowerQuery.includes('nutrition') || lowerQuery.includes('calorie') || lowerQuery.includes('diet') || lowerQuery.includes('protein') || lowerQuery.includes('vitamin')) {
+        steps.push('🥗 Evaluating nutritional profiles...');
+        steps.push('📈 Calculating macro nutrients...');
+      }
+      
+      if (lowerQuery.includes('quick') || lowerQuery.includes('fast') || lowerQuery.includes('minute') || lowerQuery.includes('time')) {
+        steps.push('⏱️ Prioritizing time-efficient recipes...');
+        steps.push('⚡ Finding quick preparation methods...');
+      }
+      
+      if (lowerQuery.includes('recipe') || lowerQuery.includes('cook') || lowerQuery.includes('meal') || lowerQuery.includes('dinner') || lowerQuery.includes('lunch') || lowerQuery.includes('breakfast')) {
+        steps.push('🍳 Searching recipe database...');
+        steps.push('👨‍🍳 Matching ingredients to recipes...');
+      }
+      
+      if (lowerQuery.includes('ingredient') || lowerQuery.includes('product') || lowerQuery.includes('item')) {
+        steps.push('🛒 Scanning product inventory...');
+        steps.push('📦 Checking availability...');
+      }
+      
+      if (lowerQuery.includes('vegan') || lowerQuery.includes('vegetarian') || lowerQuery.includes('gluten') || lowerQuery.includes('dairy-free') || lowerQuery.includes('allergen')) {
+        steps.push('� Filtering dietary restrictions...');
+        steps.push('✅ Verifying ingredient compatibility...');
+      }
+      
+      // Always add final steps
+      steps.push('✨ Crafting personalized response...');
+      
+      return steps;
+    }
+    
+    const steps = generateThinkingSteps(messageToSend);
+    let stepIndex = 0;
+    
+    const stepInterval = setInterval(() => {
+      if (stepIndex < steps.length) {
+        setThinkingSteps(prev => [...prev, steps[stepIndex]]);
+        stepIndex++;
+      }
+    }, 600); // Add a step every 600ms
+    
     try {
       const sessionId = localStorage.getItem('sessionId');
-      const res = await axios.post(`${BACKEND_URL}/api/chat`, { message: userText, sessionId });
+      const res = await axios.post(`${BACKEND_URL}/api/chat`, { message: messageToSend, sessionId });
+      clearInterval(stepInterval);
       if (res.data.sessionId) localStorage.setItem('sessionId', res.data.sessionId);
+      // If backend returned a shopping payload, immediately add to Shopping List
+      try {
+        const shopping = res?.data?.shopping;
+        if (shopping && Array.isArray(shopping.ingredients) && shopping.ingredients.length > 0) {
+          const ev = new CustomEvent('addToShopping', { detail: { ingredients: shopping.ingredients } });
+          window.dispatchEvent(ev);
+          window.showToast && window.showToast(`Added ${shopping.ingredients.length} item(s)`);
+        }
+      } catch {}
       setMessages(m=>[...m, {from:'bot', text: res.data.reply, recipes: res.data.recipes}]);
     } catch (error) {
+      clearInterval(stepInterval);
       console.error('Chat error:', error);
       setMessages(m=>[...m, {from:'bot', text: "I'm sorry, I'm having trouble responding right now. Please try again."}]);
     } finally {
       setIsLoading(false);
+      setThinkingSteps([]);
     }
+  }
+
+  function handleQuickOption(query) {
+    send(query);
   }
 
   // Minimal, safe markdown rendering for bot text: supports **bold** and line breaks
@@ -189,10 +295,33 @@ function Chat({onAddToList}){
           {m.recipes && m.recipes.map((r,ri)=> (
             <div key={ri} className="recipe">
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap: 8}}>
-                <strong style={{fontSize:'1.05rem'}}>{r.name}</strong>
-                <div>
-                  <button className="btn btn-primary btn-small" onClick={()=> onAddToList(r)}>Add ingredients</button>
-                  <button className="btn btn-accent btn-small" style={{marginLeft:8}} onClick={async ()=>{
+                {(() => {
+                  // Normalize the title: strip any LLM-provided calorie suffix like "(≈350 kcal)" or "(350 kcal)"
+                  const baseName = String(r.name || '')
+                    .replace(/\s*\(([~≈]?\s*\d+\s*(kcal|cal|calories)\s*)\)\s*$/i, '')
+                    .trim();
+                  const hasTotal = Number.isFinite(r.totalCalories) && r.totalCalories > 0;
+                  const totalText = hasTotal ? `${Math.round(r.totalCalories)} kcal` : null;
+                  return (
+                    <div style={{display:'flex', alignItems:'baseline', gap:8, minWidth:0, flex:'1 1 auto'}}>
+                      <strong style={{fontSize:'1.05rem', flex:'1 1 auto', minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{baseName || r.name}</strong>
+                      {totalText && (
+                        <span style={{
+                          fontSize:'0.85rem',
+                          color:'var(--muted)',
+                          background:'rgba(80,200,120,0.12)',
+                          border:'1px solid rgba(80,200,120,0.35)',
+                          padding:'2px 6px',
+                          borderRadius:999,
+                          flexShrink:0
+                        }} title="Total calories (from ingredients)">{totalText}</span>
+                      )}
+                    </div>
+                  );
+                })()}
+                <div style={{display:'flex', gap:8, flexShrink:0, alignItems:'center'}}>
+                  <button className="btn btn-primary btn-small" style={{flexShrink:0}} onClick={()=> onAddToList(r)}>Add ingredients</button>
+                  <button className="btn btn-accent btn-small" style={{marginLeft:8, flexShrink:0}} onClick={async ()=>{
                     setIsLoading(true);
                     try {
                       const sid = localStorage.getItem('sessionId');
@@ -210,11 +339,38 @@ function Chat({onAddToList}){
               </div>
               <div style={{marginTop:6}}>
                 <small>Ingredients:</small>
-                <ul style={{marginTop:4, paddingLeft:18}}>
-                  {r.ingredients.map((ing,ii)=>(
-                    <li key={ii}>{ing.name} {ing.found ? (ing.products?.[0]?.price ? `( $${ing.products[0].price} )` : '') : <span style={{color:'var(--danger)'}}>(not found)</span>}</li>
-                  ))}
-                </ul>
+                <table className="table" style={{marginTop:4, width:'100%'}}>
+                  <thead>
+                    <tr>
+                      <th align="left">Ingredient</th>
+                      <th align="left">Unit</th>
+                      <th align="right">Calories</th>
+                      <th align="right">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.ingredients.map((ing,ii)=> (
+                      <tr key={ii}>
+                        <td>
+                          {ing.name}
+                          {!ing.found ? <span style={{color:'var(--danger)'}}> (not found)</span> : null}
+                        </td>
+                        <td>{ing.unit || '-'}</td>
+                        <td align="right">{Number.isFinite(ing.calories) ? `${Math.round(ing.calories)} kcal` : '-'}</td>
+                        <td align="right">{Number.isFinite(ing.price) ? `$${ing.price.toFixed(2)}` : (ing.products?.[0]?.price != null ? `$${(+ing.products[0].price).toFixed(2)}` : '-' )}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td style={{fontWeight:600}}>Total</td>
+                      <td></td>
+                      <td align="right" style={{fontWeight:600}}>{Number.isFinite(r.totalCalories) ? `${Math.round(r.totalCalories)} kcal` : '-'}</td>
+                      <td align="right" style={{fontWeight:600}}>{(()=>{
+                        const total = Number.isFinite(r.totalPrice) ? r.totalPrice : (Array.isArray(r.ingredients) ? r.ingredients.reduce((s,ing)=> s + (Number.isFinite(ing.price) ? ing.price : (ing.products?.[0]?.price ?? 0)), 0) : 0);
+                        return total > 0 ? `$${total.toFixed(2)}` : '-';
+                      })()}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               {Array.isArray(r.steps) && r.steps.length > 0 ? (
                 <div style={{marginTop:8}}>
@@ -243,33 +399,73 @@ function Chat({onAddToList}){
       <div className="chat-list" ref={areaRef}>
         {messages.map((m,i)=> renderMessage(m,i))}
         {isLoading && (
-          <div className="chat-bubble chat-bot typing-bubble" role="status" aria-live="polite" aria-label={`${mascot.name} is typing`}>
-            <span style={{fontSize:'1.3em', marginRight:8}}>{mascot.emoji}</span>
-            <span className="typing-indicator">
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-            </span>
+          <div className="chat-bubble chat-bot typing-bubble" role="status" aria-live="polite" aria-label={`${mascot.name} is thinking`}>
+            <div style={{display:'flex', alignItems:'flex-start', gap:8}}>
+              <span style={{fontSize:'1.3em', flexShrink:0}}>{mascot.emoji}</span>
+              <div style={{flex:1}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
+                  <span className="typing-indicator">
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                  </span>
+                  <span style={{fontSize:'0.9em', color:'var(--muted)'}}>Thinking...</span>
+                </div>
+                {thinkingSteps.length > 0 && (
+                  <div style={{fontSize:'0.85em', color:'var(--muted)', lineHeight:1.6}}>
+                    {thinkingSteps.map((step, idx) => (
+                      <div key={idx} className="animate__animated animate__fadeInLeft" style={{animationDuration:'0.3s'}}>
+                        {step}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
       <div style={{marginTop:8,flexShrink:0}}>
-        <textarea 
-          className="input"
-          value={text} 
-          onChange={e=>setText(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          rows={3} 
-          placeholder="Type your request..."
-          disabled={isLoading}
-        />
-        <div style={{marginTop:8}}>
-          <button className="btn btn-primary" onClick={send} disabled={isLoading || !text.trim()}>
+        {/* Quick search options - shown above input before first user message */}
+        {showQuickOptions && messages.length <= 1 && (
+          <div style={{marginBottom:12}}>
+            <p style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:8, fontWeight:500}}>Quick suggestions:</p>
+            <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+              {quickOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  className="btn btn-ghost btn-small quick-option-btn"
+                  onClick={() => handleQuickOption(opt.query)}
+                  disabled={isLoading}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{display:'flex', gap:8, alignItems:'flex-end'}}>
+          <textarea 
+            className="input"
+            style={{flex:1, marginBottom:0}}
+            value={text} 
+            onChange={e=>setText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={3} 
+            placeholder="Type your request..."
+            disabled={isLoading}
+          />
+          <button 
+            className="btn btn-primary" 
+            style={{flexShrink:0, height:'fit-content'}}
+            onClick={()=>send()} 
+            disabled={isLoading || !text.trim()}
+          >
             {isLoading ? 'Sending…' : 'Send'}
           </button>
         </div>
@@ -323,7 +519,7 @@ function Shopping(){
     }
     window.addEventListener('addToShopping', handleAddToShopping);
     return () => window.removeEventListener('addToShopping', handleAddToShopping);
-  }, [cart]);
+  }, []);
 
   function addToCart(product){
     const key = product.id ?? product.name;
@@ -340,7 +536,7 @@ function Shopping(){
     });
   }
 
-  function addMany(recipes){
+  const addMany = React.useCallback((recipes) => {
     setCart(prev => {
       const next = new Map(prev);
       for (const r of recipes){
@@ -359,10 +555,10 @@ function Shopping(){
       if (next.size >= MAX_LINE_ITEMS) { window.showToast && window.showToast('Reached 100 items'); }
       return new Map(next);
     });
-  }
+  }, []);
 
   function inc(key){ setCart(prev=>{ const n=new Map(prev); const it=n.get(key); if(it){ it.qty+=1; } return new Map(n); }); }
-  function dec(key){ setCart(prev=>{ const n=new Map(prev); const it=n.get(key); if(it){ it.qty=Math.max(1,it.qty-1);} return new Map(n); }); }
+  function dec(key){ setCart(prev=>{ const n=new Map(prev); const it=n.get(key); if(it){ if(it.qty<=1){ n.delete(key); } else { it.qty-=1; } } return new Map(n); }); }
   function remove(key){ setCart(prev=>{ const n=new Map(prev); n.delete(key); return new Map(n); }); }
   function clearAll(){ setCart(new Map()); localStorage.removeItem('shopping'); window.showToast && window.showToast('List cleared'); }
 
@@ -453,7 +649,9 @@ function App(){
   }
   return (
     <div className="container app-shell">
-      <h1 className="app-title" aria-label="Grocerly">Grocerly</h1>
+      <h1 className="app-title" aria-label="Grocerly - Your Food & Health Companion" style={{marginBottom: '24px'}}>
+        Grocerly <span style={{fontWeight: 600}}>— Your Food & Health Companion</span>
+      </h1>
       <div className="main-grid">
         <Chat onAddToList={(r)=> handleAddToList(r)} />
         <div className="sidebar-stack">

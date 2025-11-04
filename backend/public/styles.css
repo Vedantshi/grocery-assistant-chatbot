@@ -76,7 +76,7 @@ body{
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin: 0 0 24px 0;
+  margin: 0;
   letter-spacing: -1.5px;
   text-align: center;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
@@ -205,25 +205,25 @@ small.subtle { color: var(--muted); }
   position: absolute;
   width: 64px; height: 64px;
   fill: #5fae59;
-  opacity: .30;
+  opacity: .34; /* slightly clearer */
   stroke: #154f1b;
   stroke-width: 1.2;
-  stroke-opacity: .28;
-  filter: drop-shadow(0 3px 9px rgba(21,79,27,.18));
+  stroke-opacity: .34; /* slightly clearer */
+  filter: drop-shadow(0 3px 9px rgba(21,79,27,.2));
 }
 
 /* Parallax layers with different speeds and opacities */
 .bg-produce .layer1 .produce {
   animation: float 26s linear infinite;
-  opacity: .30;
+  opacity: .34;
 }
 .bg-produce .layer2 .produce {
   animation: float 20s linear infinite;
-  opacity: .24;
+  opacity: .28;
 }
 .bg-produce .layer3 .produce {
   animation: float 16s linear infinite;
-  opacity: .18;
+  opacity: .22;
 }
 
 @keyframes float {
@@ -302,9 +302,9 @@ html[data-theme="dark"] .bg-gradient {
 
 html[data-theme="dark"] .bg-produce .produce {
   fill: #7ed09a;
-  opacity: .28;
+  opacity: .30;
   stroke: #c7f1d2;
-  stroke-opacity: .35;
+  stroke-opacity: .40;
 }
 html[data-theme="dark"] .app-title {
   background: linear-gradient(135deg, #57c07a 0%, #7ed09a 50%, #57c07a 100%);
@@ -381,6 +381,39 @@ textarea.input {
 
 .btn-small { padding: 6px 12px; border-radius: 999px; font-size: 14px; height: auto; font-weight: 600; }
 
+/* Quick option buttons (pill-shaped suggestion chips) */
+.quick-option-btn {
+  padding: 12px 20px !important;
+  border-radius: 24px !important;
+  font-size: 1em !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  cursor: pointer;
+  transition: all 0.2s ease !important;
+  white-space: nowrap;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.quick-option-btn:hover:not(:disabled) {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(30,109,39,0.2) !important;
+}
+
+.quick-option-btn:active:not(:disabled) {
+  transform: translateY(0px) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+}
+
+.quick-option-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-qty {
   width: 28px;
   height: 28px;
@@ -406,6 +439,31 @@ textarea.input {
 .table tbody tr.is-selected { background: color-mix(in oklab, var(--primary) 18%, transparent); }
 .price-col { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .add-col { width: 60px; text-align: center; padding: 8px 4px !important; }
+
+/* Make Products table columns evenly spaced */
+.products-table { table-layout: fixed; }
+/* Use colgroup-defined widths for tighter distribution */
+.products-table th, .products-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Proportional widths (sum ≈ 100%) */
+.products-table col.col-item { width: 34%; }
+.products-table col.col-category { width: 18%; }
+.products-table col.col-unit { width: 12%; }
+.products-table col.col-calories { width: 14%; }
+.products-table col.col-price { width: 16%; }
+.products-table col.col-add { width: 6%; }
+
+/* Ensure cell-specific fixed widths don't override col widths */
+.products-table .add-col { width: auto !important; text-align: center; padding: 8px 4px; }
+.products-table .price-col { width: auto !important; }
+/* Keep right alignment for numeric columns */
+.products-table th[align="right"],
+.products-table td[align="right"],
+.products-table .price-col { text-align: right; }
+/* Align price and calories to the right while preserving equal widths */
+.products-table th[align="right"],
+.products-table td[align="right"],
+.products-table .price-col { text-align: right; }
 
 .scroll-area, .scroll { 
   flex: 1;

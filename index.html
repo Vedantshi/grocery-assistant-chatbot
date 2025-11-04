@@ -1,11 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="refresh" content="0;url=/backend/public/index.html">
-    <title>Redirecting...</title>
+  <meta charset="utf-8" />
+  <title>Redirecting…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Preserve query parameters like ?backend= when redirecting to the app root.
+       We rely on vercel.json rewrites to serve /backend/public assets. -->
+  <script>
+    (function(){
+      var q = window.location.search || '';
+      // Use replace to avoid keeping the intermediate entry in history
+      window.location.replace('/' + (q || ''));
+    })();
+  </script>
+  <noscript>
+    <meta http-equiv="refresh" content="0;url=/>">
+  </noscript>
 </head>
 <body>
-    <p>Redirecting to Grocery Assistant...</p>
-    <script>window.location.href = '/backend/public/index.html';</script>
+  <p>Redirecting to Grocerly…</p>
+  <p><a href="/">Click here</a> if you are not redirected.</p>
 </body>
 </html>

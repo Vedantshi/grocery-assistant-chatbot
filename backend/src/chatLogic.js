@@ -1,4 +1,5 @@
 ﻿const { chatWithOllama, suggestWithOllama } = require('./ollamaService');
+const { parseBudgetCap, filterRecipesByBudget, estimateRecipeCost, sortByCheapest } = require('./budgetUtils');
 
 // Lightweight debug logger (disabled by default unless DEBUG=1 or NODE_ENV=development)
 const DEBUG = process.env.DEBUG === '1' || process.env.NODE_ENV === 'development';
@@ -740,18 +741,35 @@ function buildReplyFromSuggestions(message, recipes, context, options = {}) {
 function enrichRecipesWithProducts(recipes, products) {
     try {
         const prods = Array.isArray(products) ? products : [];
-        return (recipes || []).map(r => ({
-            ...r,
-            ingredients: (r.ingredients || []).map(ing => {
+        return (recipes || []).map(r => {
+            let totalCalories = 0;
+            let totalPrice = 0;
+            const enrichedIngredients = (r.ingredients || []).map(ing => {
                 const ingName = (ing?.name || ing || '').toString();
-                const matches = prods.filter(p => (p.item || '').toLowerCase().includes(ingName.toLowerCase()));
+                const lname = ingName.toLowerCase();
+                const matches = prods.filter(p => (p.item || '').toLowerCase().includes(lname));
+                const first = matches[0];
+                const calories = Number(first?.nutrition?.calories) || 0;
+                const price = Number(first?.price);
+                const unit = first?.unit || '';
+                if (Number.isFinite(calories)) totalCalories += calories;
+                if (Number.isFinite(price)) totalPrice += price;
                 return {
                     name: ingName,
                     found: matches.length > 0,
-                    products: matches.slice(0, 1)
+                    products: matches ? matches.slice(0, 1) : [],
+                    calories,
+                    price: Number.isFinite(price) ? price : undefined,
+                    unit: unit || undefined
                 };
-            })
-        }));
+            });
+            return {
+                ...r,
+                ingredients: enrichedIngredients,
+                totalCalories,
+                totalPrice: Number.isFinite(totalPrice) ? totalPrice : undefined
+            };
+        });
     } catch {
         return recipes || [];
     }
@@ -1112,6 +1130,837 @@ function extractUserPreferences(conversationHistory) {
     return preferences;
 }
 
+// ============================================================
+// NUTRITION COACH FLOW
+// Multi-step interactive flow for personalized nutrition guidance
+// ============================================================
+async function handleNutritionFlow(message, context, data) {
+    // Always fully reset nutrition context if trigger is received
+    if (message === '__NUTRITION_START__') {
+        delete context.nutritionFlow;
+        delete context.nutritionData;
+        // Remove any other nutrition-related keys if present
+        Object.keys(context).forEach(k => {
+            if (k.startsWith('nutrition')) delete context[k];
+        });
+        context.nutritionFlow = 'awaiting_height_weight';
+        context.nutritionData = {};
+        const reply = "🥗 **Nutrition Coach**\n\n**What I do:** I help you understand your body metrics (BMI), calculate your daily calorie needs, determine your macro breakdown (protein, carbs, fats), and suggest recipes that align with your nutritional goals.\n\n---\n\nLet's start by understanding your body metrics.\n\nPlease tell me your **height** (in cm or feet/inches) and **weight** (in kg or lbs).\n\nExample: \"170 cm, 70 kg\" or \"5'7\", 150 lbs\"";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // Step 2: Parse height and weight, calculate BMI
+    if (context.nutritionFlow === 'awaiting_height_weight') {
+        const parsed = parseHeightWeight(message);
+        
+        if (!parsed.height || !parsed.weight) {
+            const reply = "I couldn't quite understand those measurements. Please provide both your height and weight.\n\nExamples:\n• \"170 cm, 70 kg\"\n• \"5 feet 7 inches, 150 pounds\"\n• \"5'7\", 65 kg\"";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // Store metrics
+        context.nutritionData.heightCm = parsed.height;
+        context.nutritionData.weightKg = parsed.weight;
+
+        // Calculate BMI
+        const heightM = parsed.height / 100;
+        const bmi = (parsed.weight / (heightM * heightM)).toFixed(1);
+        context.nutritionData.bmi = parseFloat(bmi);
+
+        // Determine BMI category and provide analysis
+        let category, analysis, advice;
+        if (bmi < 18.5) {
+            category = "Underweight";
+            analysis = "Your BMI suggests you may be underweight.";
+            advice = "Consider consulting a healthcare provider. Focus on nutrient-dense foods and strength training.";
+        } else if (bmi >= 18.5 && bmi < 25) {
+            category = "Normal weight";
+            analysis = "Great news! Your BMI is in the healthy range.";
+            advice = "Maintain your current lifestyle with balanced nutrition and regular activity.";
+        } else if (bmi >= 25 && bmi < 30) {
+            category = "Overweight";
+            analysis = "Your BMI indicates you're in the overweight range.";
+            advice = "Consider portion control, increase physical activity, and focus on whole foods.";
+        } else {
+            category = "Obese";
+            analysis = "Your BMI is in the obese range.";
+            advice = "I recommend consulting a healthcare provider for personalized guidance. Focus on gradual, sustainable changes.";
+        }
+
+        const reply = `📊 **Your BMI Analysis**\n\n**Height:** ${parsed.height} cm (${(parsed.height / 2.54 / 12).toFixed(1)} ft)\n**Weight:** ${parsed.weight} kg (${(parsed.weight * 2.205).toFixed(1)} lbs)\n**BMI:** ${bmi}\n**Category:** ${category}\n\n${analysis} ${advice}\n\nWould you like me to calculate your **daily calorie and macronutrient needs** based on your metrics? (Yes/No)`;
+        
+        context.nutritionFlow = 'awaiting_macro_decision';
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // Step 3: Ask if they want macro calculations
+    if (context.nutritionFlow === 'awaiting_macro_decision') {
+        const wants = message.toLowerCase().includes('yes') || message.toLowerCase().includes('sure') || message.toLowerCase().includes('ok') || message.toLowerCase().includes('yeah');
+        
+        if (!wants) {
+            context.nutritionFlow = 'awaiting_recipe_decision';
+            const reply = "No problem! Would you like me to suggest some healthy recipes based on your profile? (Yes/No)";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // Ask for activity level to calculate TDEE
+        context.nutritionFlow = 'awaiting_activity_level';
+        const reply = "Perfect! To calculate your daily needs, I need to know your **activity level**:\n\n1️⃣ **Sedentary** - Little to no exercise\n2️⃣ **Lightly Active** - Exercise 1-3 days/week\n3️⃣ **Moderately Active** - Exercise 3-5 days/week\n4️⃣ **Very Active** - Exercise 6-7 days/week\n5️⃣ **Extremely Active** - Intense exercise daily\n\nJust reply with the number (1-5) or the activity level name.";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // Step 4: Calculate macros based on activity level
+    if (context.nutritionFlow === 'awaiting_activity_level') {
+        const activityLevel = parseActivityLevel(message);
+        
+        if (!activityLevel) {
+            const reply = "Please choose a number from 1-5 or describe your activity level (sedentary, lightly active, moderately active, very active, or extremely active).";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        context.nutritionData.activityLevel = activityLevel;
+
+        // Calculate BMR (Mifflin-St Jeor Equation) - assuming average age 30, we'll use simplified calc
+        // For a more accurate calculation, you'd need age and gender
+        const weight = context.nutritionData.weightKg;
+        const height = context.nutritionData.heightCm;
+        
+        // Simplified BMR (assuming average adult)
+        const bmr = Math.round(10 * weight + 6.25 * height - 5 * 30 + 5); // Assuming male, age 30
+        
+        // TDEE multipliers
+        const multipliers = {
+            sedentary: 1.2,
+            'lightly active': 1.375,
+            'moderately active': 1.55,
+            'very active': 1.725,
+            'extremely active': 1.9
+        };
+        
+        const tdee = Math.round(bmr * multipliers[activityLevel]);
+        context.nutritionData.tdee = tdee;
+        
+        // Macro breakdown (balanced approach: 30% protein, 35% carbs, 35% fat)
+        const proteinCals = Math.round(tdee * 0.30);
+        const carbCals = Math.round(tdee * 0.35);
+        const fatCals = Math.round(tdee * 0.35);
+        
+        const proteinG = Math.round(proteinCals / 4);
+        const carbG = Math.round(carbCals / 4);
+        const fatG = Math.round(fatCals / 9);
+        
+        context.nutritionData.calories = tdee;
+        context.nutritionData.protein = proteinG;
+        context.nutritionData.carbs = carbG;
+        context.nutritionData.fat = fatG;
+
+        const reply = `🎯 **Your Daily Nutrition Targets**\n\n**Activity Level:** ${activityLevel.charAt(0).toUpperCase() + activityLevel.slice(1)}\n**Daily Calories:** ${tdee} kcal\n\n**Macronutrients:**\n🥩 **Protein:** ${proteinG}g (${proteinCals} kcal)\n🍞 **Carbs:** ${carbG}g (${carbCals} kcal)\n🥑 **Fat:** ${fatG}g (${fatCals} kcal)\n\n*Note: These are estimates. For personalized advice, consult a nutritionist or dietitian.*\n\nWould you like me to suggest **recipes that align with your nutrition goals**? (Yes/No)`;
+        
+        context.nutritionFlow = 'awaiting_recipe_decision';
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // Step 5: Suggest recipes based on nutrition profile
+    if (context.nutritionFlow === 'awaiting_recipe_decision') {
+        const wants = message.toLowerCase().includes('yes') || message.toLowerCase().includes('sure') || message.toLowerCase().includes('ok') || message.toLowerCase().includes('yeah');
+        
+        if (!wants) {
+            const reply = "No problem! Feel free to ask me anything else or click another quick option. Your nutrition data is saved for this session if you want to revisit it! 😊";
+            context.nutritionFlow = null; // Reset flow
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // Build a nutrition-focused query based on their BMI and goals
+        const bmi = context.nutritionData.bmi;
+        let nutritionQuery;
+        
+        if (bmi < 18.5) {
+            nutritionQuery = "high protein and healthy high-calorie recipes for weight gain";
+        } else if (bmi >= 18.5 && bmi < 25) {
+            nutritionQuery = "balanced, nutritious recipes for maintaining healthy weight";
+        } else {
+            nutritionQuery = "low-calorie, high-protein recipes for healthy weight loss";
+        }
+
+        try {
+            // Use the LLM to generate personalized recipe suggestions
+            const llmResult = await suggestWithOllama({
+                message: `User's nutrition profile: BMI ${bmi}, Daily calories: ${context.nutritionData.calories || 2000}kcal, Protein: ${context.nutritionData.protein || 150}g, Carbs: ${context.nutritionData.carbs || 200}g, Fat: ${context.nutritionData.fat || 70}g.\n\nSuggest 3 recipes that are ${nutritionQuery}. Each recipe should mention approximate calories and be practical to make.`,
+                context: context.messages.slice(-4),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: true,
+                requestedCount: 3
+            });
+
+            if (llmResult && llmResult.recipes && llmResult.recipes.length > 0) {
+                const enrichedRecipes = enrichRecipesWithProducts(llmResult.recipes, data.products || []);
+                enrichedRecipes.forEach(r => context.seenRecipes.add(r.name));
+                
+                const reply = `🍽️ **Personalized Recipe Suggestions**\n\nBased on your nutrition profile (BMI: ${bmi}, ${context.nutritionData.calories}kcal/day), here are recipes tailored for you:\n\n${llmResult.reply || 'Here are your personalized recipes!'}`;
+                
+                context.nutritionFlow = null; // Reset flow
+                context.messages.push({ from: 'bot', text: reply });
+                return { reply, recipes: enrichedRecipes, context };
+            }
+        } catch (error) {
+            console.error('Error generating nutrition recipes:', error);
+        }
+
+        // Fallback to database search
+        const recipes = findRecipesForOccasion(nutritionQuery, data.recipes || [], context.seenRecipes, context.messages, { treatAsMore: false });
+        const enrichedRecipes = enrichRecipesWithProducts(recipes.slice(0, 3), data.products || []);
+        enrichedRecipes.forEach(r => context.seenRecipes.add(r.name));
+        
+        const reply = `🍽️ **Personalized Recipe Suggestions**\n\nBased on your nutrition profile (BMI: ${bmi}, ${context.nutritionData.calories}kcal/day), here are some recipes for you!`;
+        
+        context.nutritionFlow = null; // Reset flow
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: enrichedRecipes, context };
+    }
+
+    // Fallback
+    return { reply: "I'm not sure what happened. Let's start over! Click the Nutrition Coach button again.", recipes: [], context };
+}
+
+// Helper: Parse height and weight from user input
+function parseHeightWeight(text) {
+    const result = { height: null, weight: null };
+    
+    // Try to parse metric (cm, kg)
+    const cmMatch = text.match(/(\d+(?:\.\d+)?)\s*cm/i);
+    const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*kg/i);
+    
+    if (cmMatch) result.height = parseFloat(cmMatch[1]);
+    if (kgMatch) result.weight = parseFloat(kgMatch[1]);
+    
+    // Try to parse imperial (feet/inches, lbs)
+    const feetInchMatch = text.match(/(\d+)\s*(?:feet|ft|')\s*(\d+)?/i);
+    const lbsMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)/i);
+    
+    if (feetInchMatch) {
+        const feet = parseInt(feetInchMatch[1]);
+        const inches = feetInchMatch[2] ? parseInt(feetInchMatch[2]) : 0;
+        result.height = Math.round((feet * 12 + inches) * 2.54); // Convert to cm
+    }
+    
+    if (lbsMatch) {
+        result.weight = Math.round(parseFloat(lbsMatch[1]) / 2.205); // Convert to kg
+    }
+    
+    // Try simple number extraction if no units found
+    if (!result.height || !result.weight) {
+        const numbers = text.match(/\d+(?:\.\d+)?/g);
+        if (numbers && numbers.length >= 2) {
+            const num1 = parseFloat(numbers[0]);
+            const num2 = parseFloat(numbers[1]);
+            
+            // Heuristic: height is usually larger in cm, weight varies
+            if (num1 > 100 && num1 < 250) result.height = num1; // Likely cm
+            else if (num1 > 4 && num1 < 8) result.height = Math.round(num1 * 30.48); // Likely feet
+            
+            if (num2 > 30 && num2 < 200) result.weight = num2; // Could be kg or lbs
+            else if (!result.weight && num1 > 30 && num1 < 200) result.weight = num1;
+        }
+    }
+    
+    return result;
+}
+
+// Helper: Parse activity level from user input
+function parseActivityLevel(text) {
+    const lower = text.toLowerCase();
+    
+    if (lower.includes('1') || lower.includes('sedentary')) return 'sedentary';
+    if (lower.includes('2') || lower.includes('lightly')) return 'lightly active';
+    if (lower.includes('3') || lower.includes('moderately') || lower.includes('moderate')) return 'moderately active';
+    if (lower.includes('4') || lower.includes('very active') || lower.includes('very')) return 'very active';
+    if (lower.includes('5') || lower.includes('extremely') || lower.includes('extreme')) return 'extremely active';
+    
+    return null;
+}
+
+// ============================================================
+// BUDGET PLANNER FLOW
+// Ask budget and servings, suggest <=3 grounded recipes under budget
+// ============================================================
+async function handleBudgetFlow(message, context, data) {
+    // Always reset on trigger
+    if (message === '__BUDGET_START__') {
+        delete context.budgetFlow;
+        delete context.budget;
+        delete context.servings;
+    }
+    
+    if (!context.budgetFlow) {
+        context.budgetFlow = 'awaiting_budget';
+        const reply = "💸 **Budget Planner**\n\n**What I do:** I help you find recipes that fit within your budget. Tell me your spending limit and servings needed, and I'll suggest affordable, delicious recipes that won't break the bank. I'll calculate total costs and show you the cheapest options first.\n\n---\n\nWhat is your total budget and how many servings do you need?\n\nExample: '$15 for 2 servings' or 'under $20 for 3'.";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (context.budgetFlow === 'awaiting_budget') {
+        const { budget, servings } = parseBudgetAndServings(message);
+        if (!budget) {
+            const reply = "Please specify a dollar budget (e.g., '$15 for 2 servings').";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+        context.budget = budget;
+        context.servings = servings || 2;
+
+        try {
+            const llm = await suggestWithOllama({
+                message: `Suggest 3 simple, affordable recipes suitable for ${context.servings} serving(s). Keep within roughly $${budget} total using the provided product list when possible. Keep descriptions concise.`,
+                context: context.messages.slice(-6),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: true,
+                requestedCount: 3
+            });
+
+            let recipes = Array.isArray(llm?.recipes) ? llm.recipes : [];
+            recipes = enrichRecipesWithProducts(recipes, data.products || []);
+
+            // Rough cost estimate by summing first matched product prices
+            const priced = recipes.map(r => ({
+                ...r,
+                approxCost: (r.ingredients || []).reduce((sum, ing) => sum + +(ing.products?.[0]?.price ?? 0), 0)
+            }));
+
+            // Strictly enforce the user's budget in this flow (no automatic buffer)
+            const filtered = priced.filter(r => Number.isFinite(r.approxCost) && r.approxCost <= budget + 1e-9);
+
+            let final = (filtered.length > 0 ? filtered : []);
+            let budgetNote = '';
+            if (final.length === 0) {
+                // If nothing fits strictly, show up to 3 closest options but clearly label them as over budget
+                const closest = sortByCheapest(priced).slice(0, 3);
+                final = closest;
+                if (closest.length > 0) {
+                    const lines = closest.map(r => `• ${r.name} — ~$${estimateRecipeCost(r).toFixed(2)}`).join('\n');
+                    budgetNote = `\n\nI couldn't find recipes strictly under $${budget}. Here are the closest options (slightly over):\n${lines}`;
+                } else {
+                    budgetNote = `\n\nI couldn't find any recipes close to this budget using current prices.`;
+                }
+            }
+            final = final.slice(0, 3);
+            final.forEach(r => context.seenRecipes.add(r.name));
+
+            const reply = `Here ${final.length === 1 ? 'is 1 recipe' : `are ${final.length} recipes`} ${filtered.length > 0 ? `within your $${budget}` : 'closest to your budget'} for ${context.servings} serving(s). I keep suggestions short due to space—ask for 'More' if you want additional options.` + budgetNote;
+            context.budgetFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: final, context };
+        } catch (e) {
+            console.error('Budget flow error:', e);
+            const reply = "I couldn't generate budget recipes right now. Try again or ask for budget-friendly recipes under $X.";
+            context.budgetFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's start over—tap Budget Planner again and tell me a budget like '$15 for 2 servings'.";
+    context.budgetFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+function parseBudgetAndServings(text) {
+    const dollars = text.match(/\$?\s*(\d+(?:\.\d+)?)/);
+    const serv = text.match(/(\d+)\s*(?:servings?|people|persons?)/i);
+    return { budget: dollars ? parseFloat(dollars[1]) : null, servings: serv ? parseInt(serv[1]) : null };
+}
+
+// ============================================================
+// TIME SAVER FLOW
+// Ask available minutes; suggest quick recipes; <=3 items
+// ============================================================
+async function handleTimeFlow(message, context, data) {
+    // Always reset on trigger
+    if (message === '__TIME_START__') {
+        delete context.timeFlow;
+        delete context.minutes;
+    }
+    
+    if (!context.timeFlow) {
+        context.timeFlow = 'awaiting_minutes';
+        const reply = "⏱️ **Time Saver**\n\n**What I do:** I find quick recipes based on how much time you have. Whether you've got 15 minutes or 45, I'll suggest fast, simple meals that fit your schedule perfectly.\n\n---\n\nHow much time do you have?\n\nReply with minutes like '20 minutes' or 'under 30'. I'll suggest a few quick ideas (2–3) so we don't overload the chat.";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (context.timeFlow === 'awaiting_minutes') {
+        const minutes = parseMinutes(textToNumberString(message));
+        if (!minutes) {
+            const reply = "Please tell me the minutes you have (e.g., '15 minutes').";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+        context.minutes = minutes;
+        try {
+            const llm = await suggestWithOllama({
+                message: `Suggest 3 recipes that can be made in about ${minutes} minutes. Keep steps short and use available products when possible.`,
+                context: context.messages.slice(-6),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: true,
+                requestedCount: 3
+            });
+            const recipes = enrichRecipesWithProducts(llm?.recipes || [], data.products || []);
+            recipes.slice(0,3).forEach(r => context.seenRecipes.add(r.name));
+            const reply = `Here ${recipes.length === 1 ? 'is a quick recipe' : `are ${Math.min(recipes.length,3)} quick recipes`} for ~${minutes} minutes. I keep it to a few at a time—use 'More' for extras.`;
+            context.timeFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: recipes.slice(0,3), context };
+        } catch (e) {
+            console.error('Time flow error:', e);
+            const reply = "Sorry, I couldn't compile quick recipes right now.";
+            context.timeFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's restart—tap Time Saver and tell me the minutes available.";
+    context.timeFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+function textToNumberString(s){ return String(s||''); }
+function parseMinutes(text){ const m = text.match(/(\d+)/); return m ? parseInt(m[1]) : null; }
+
+// ============================================================
+// PANTRY HELPER FLOW
+// Ask for items user has; suggest <=3 recipes using overlapping ingredients
+// ============================================================
+// PANTRY HELPER FLOW
+// Conversational guidance about food storage, freshness, pairings, and sustainability
+// ============================================================
+async function handlePantryFlow(message, context, data) {
+    debug('handlePantryFlow called. Message:', message, 'Current flow state:', context.pantryFlow);
+    
+    // Always reset on trigger
+    if (message === '__PANTRY_START__') {
+        debug('Resetting pantry flow due to trigger message');
+        delete context.pantryFlow;
+        delete context.pantryItems;
+    }
+    
+    if (!context.pantryFlow) {
+        context.pantryFlow = 'awaiting_items';
+        const reply = "🧺 **Pantry Helper**\n\n**What I do:** I help you make the most of ingredients you already have. I'll give you tips on storage, freshness, which items pair well, and how to reduce waste. Then, if you want, I can suggest recipes using your exact ingredients.\n\n---\n\nWhat ingredients or groceries do you have that you'd like to talk about?\n\nJust list them out (like 'eggs, spinach, milk' or 'chicken, rice, tomatoes').";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (context.pantryFlow === 'awaiting_items') {
+        const items = (message || '').split(/,|\n|and/).map(s=>s.trim()).filter(Boolean).slice(0,12);
+        if (items.length < 1) {
+            const reply = "Hmm, I didn't catch any items. Could you list what you have? For example: 'eggs, spinach, milk'.";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+        
+        context.pantryItems = items;
+        context.pantryFlow = 'gave_guidance';
+
+        try {
+            // Use LLM to generate conversational guidance about storage, freshness, pairings, and sustainability
+            const guidancePrompt = `The user has these ingredients: ${items.join(', ')}.
+
+Act as a friendly, knowledgeable food companion. Provide helpful, conversational guidance about:
+1. How to store or preserve these items properly
+2. How long they typically stay fresh
+3. Which items pair well together
+4. Tips to reduce waste (using stems, peels, etc.)
+5. Any sustainability tips
+
+Keep it warm, gentle, and conversational - like a smart friend who knows food facts. Use emojis sparingly. Keep it to 3-4 short paragraphs maximum.
+
+End with: "Would you like me to suggest some recipes using what you have?"`;
+
+            const guidanceResponse = await chatWithOllama(
+                guidancePrompt,
+                context.messages.slice(-4),
+                [],
+                []
+            );
+
+            const reply = guidanceResponse || `Nice! You've got ${items.join(', ')}. 🌱\n\nLet me share some tips about these items, and then I can help you use them wisely!\n\nWould you like me to suggest some recipes using what you have?`;
+            
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        } catch (e) {
+            console.error('Pantry guidance error:', e);
+            const reply = `Nice combo! You've got ${items.join(', ')}. 🌱\n\nThese ingredients can work great together. Most fresh items like these stay good for 3-7 days when stored properly in the fridge.\n\nWould you like me to suggest some recipes using what you have?`;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    if (context.pantryFlow === 'gave_guidance') {
+        const userResponse = message.toLowerCase().trim();
+        const wantsRecipes = /\b(yes|yeah|sure|ok|okay|yep|yup|please|show|suggest)\b/i.test(userResponse);
+        
+        if (!wantsRecipes) {
+            const reply = "No problem! Feel free to come back anytime you need help with your pantry items. 😊";
+            context.pantryFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // User wants recipes - generate them using ALL the ingredients they listed
+        const items = context.pantryItems || [];
+        try {
+            const llm = await suggestWithOllama({
+                message: `Create up to 3 recipes where EACH recipe uses ALL of these ingredients: ${items.join(', ')}.
+
+IMPORTANT RULES:
+- Each recipe MUST include ALL of these ingredients: ${items.join(', ')}
+- You CAN add basic pantry staples like oil, butter, salt, pepper, spices to complete the recipe
+- But EVERY recipe must use ALL the main ingredients the user listed
+- Keep each recipe concise and practical
+
+Example: If user has "tomatoes, onion, eggs" - every recipe should use tomatoes AND onion AND eggs (plus optional basics like salt, oil).`,
+                context: context.messages.slice(-6),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: false,
+                requestedCount: 3
+            });
+            
+            let recipes = enrichRecipesWithProducts(llm?.recipes || [], data.products || []);
+            
+            // Filter recipes to ensure they contain ALL user's main ingredients
+            const userItemsLower = new Set(items.map(i => i.toLowerCase().trim()));
+            const basicStaples = new Set(['oil', 'olive oil', 'butter', 'salt', 'pepper', 'black pepper', 'spice', 'spices', 'garlic', 'onion powder', 'paprika', 'cumin']);
+            
+            recipes = recipes.filter(recipe => {
+                const recipeIngredients = (recipe.ingredients || []).map(ing => 
+                    (ing.name || '').toLowerCase().trim()
+                );
+                
+                // Check if ALL user ingredients are present in the recipe
+                return Array.from(userItemsLower).every(userItem => 
+                    recipeIngredients.some(ingName => 
+                        ingName.includes(userItem) || userItem.includes(ingName)
+                    )
+                );
+            });
+            
+            if (recipes.length === 0) {
+                const reply = `Hmm, I'm having trouble creating recipes that use ALL of: ${items.join(', ')}. Try adding a couple more ingredients, or I can suggest recipes that use most of them instead!`;
+                context.pantryFlow = null;
+                context.messages.push({ from: 'bot', text: reply });
+                return { reply, recipes: [], context };
+            }
+            
+            recipes.slice(0,3).forEach(r => context.seenRecipes.add(r.name));
+            const reply = `Perfect! Here ${recipes.length === 1 ? 'is 1 recipe' : `are ${Math.min(recipes.length,3)} recipes`} using all your ingredients: ${items.join(', ')}! 🎯`;
+            context.pantryFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: recipes.slice(0,3), context };
+        } catch (e) {
+            console.error('Pantry recipe generation error:', e);
+            const reply = "I'm having trouble generating recipes right now. Try asking me again in a moment!";
+            context.pantryFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's start fresh—tap Pantry Helper and tell me what ingredients you have!";
+    context.pantryFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+// ============================================================
+// MEAL PREP FLOW
+// Ask for recipe type preference, then suggest 1 breakfast, 1 lunch, 1 dinner
+// ============================================================
+async function handleMealPrepFlow(message, context, data) {
+    debug('handleMealPrepFlow called. Message:', message, 'Current flow state:', context.mealPrepFlow);
+    
+    // Always reset on trigger, even if flow state exists
+    if (message === '__MEAL_PREP_START__') {
+        debug('Resetting meal prep flow due to trigger message');
+        delete context.mealPrepFlow;
+        delete context.mealPrepPreference;
+    }
+    
+    if (!context.mealPrepFlow) {
+        debug('Starting new meal prep flow - asking for preference');
+        context.mealPrepFlow = 'awaiting_preference';
+        const reply = "🍱 **Meal Prep**\n\n**What I do:** I help you plan a full day of meals! Tell me your preference, and I'll suggest 3 recipes—one for breakfast, one for lunch, and one for dinner—perfect for meal planning and prep.\n\n---\n\nWhat type of recipes would you prefer?\n\n1️⃣ Protein-rich\n2️⃣ Vegetarian\n3️⃣ Low-carb\n4️⃣ Quick & easy\n5️⃣ High-fiber\n\nJust reply with the number (1-5) or describe your preference!";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (context.mealPrepFlow === 'awaiting_preference') {
+        debug('Processing user preference:', message);
+        let preference = message.trim();
+        
+        // Map number inputs to preferences
+        const numberMap = {
+            '1': 'protein-rich',
+            '2': 'vegetarian',
+            '3': 'low-carb',
+            '4': 'quick and easy',
+            '5': 'high-fiber'
+        };
+        
+        // Check if user entered a number
+        if (numberMap[preference]) {
+            preference = numberMap[preference];
+        }
+        
+        if (preference.length < 3) {
+            const reply = "Please tell me what type of recipes you'd like (e.g., '1' for protein-rich, '2' for vegetarian, or describe your preference).";
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+        
+        context.mealPrepPreference = preference;
+
+        try {
+            const llm = await suggestWithOllama({
+                message: `Suggest exactly 3 ${preference} recipes for meal prep:\n1. ONE breakfast recipe\n2. ONE lunch recipe\n3. ONE dinner recipe\n\nEach should be practical for meal prep and clearly labeled with its meal type. Keep descriptions concise.`,
+                context: context.messages.slice(-6),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: false,
+                requestedCount: 3
+            });
+
+            let recipes = Array.isArray(llm?.recipes) ? llm.recipes : [];
+            
+            // Ensure we have breakfast, lunch, and dinner
+            const breakfast = recipes.find(r => (r.mealType || '').toLowerCase().includes('breakfast')) || recipes[0];
+            const lunch = recipes.find(r => (r.mealType || '').toLowerCase().includes('lunch')) || recipes[1];
+            const dinner = recipes.find(r => (r.mealType || '').toLowerCase().includes('dinner')) || recipes[2];
+            
+            // Set meal types explicitly
+            if (breakfast) breakfast.mealType = 'breakfast';
+            if (lunch) lunch.mealType = 'lunch';
+            if (dinner) dinner.mealType = 'dinner';
+            
+            const finalRecipes = [breakfast, lunch, dinner].filter(Boolean);
+            const enriched = enrichRecipesWithProducts(finalRecipes, data.products || []);
+            enriched.forEach(r => context.seenRecipes.add(r.name));
+
+            const reply = `Perfect! Here's your ${preference} meal prep plan:\n\n🌅 Breakfast: ${breakfast?.name || 'N/A'}\n🌞 Lunch: ${lunch?.name || 'N/A'}\n🌙 Dinner: ${dinner?.name || 'N/A'}\n\nClick "Add Ingredients" to add any recipe's ingredients to your shopping list!`;
+            context.mealPrepFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: enriched, context };
+        } catch (e) {
+            console.error('Meal prep flow error:', e);
+            const reply = "I couldn't generate your meal prep plan right now. Try again or describe the type of recipes you want.";
+            context.mealPrepFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's restart—tap Meal Prep and tell me what type of recipes you prefer.";
+    context.mealPrepFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+// ============================================================
+// HEALTHY OPTIONS FLOW
+// Nutrition and mindfulness guide for smart swaps and balanced eating
+// ============================================================
+async function handleHealthyFlow(message, context, data) {
+    debug('handleHealthyFlow called. Message:', message, 'Current flow state:', context.healthyFlow);
+    
+    // Always reset on trigger
+    if (message === '__HEALTHY_START__') {
+        debug('Resetting healthy flow due to trigger message');
+        delete context.healthyFlow;
+    }
+    
+    if (!context.healthyFlow) {
+        context.healthyFlow = 'awaiting_topic';
+        const reply = "🌿 **Healthy Options**\n\n**What I do:** I'm your friendly nutrition and mindfulness guide. I help you make healthier food choices by suggesting smart swaps (like chips → roasted chickpeas) and offering encouragement. No strict diet rules—just positive, practical tips to help you eat better.\n\n---\n\nWhat kind of food are you thinking about today — snacks, meals, or drinks?\n\n(Or just tell me what's on your mind, like 'I've been eating too many chips' or 'trying to eat healthier')";
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (context.healthyFlow === 'awaiting_topic') {
+        const userMessage = message.toLowerCase().trim();
+        
+        // Check if it's a general "trying to eat healthier" message
+        const isGeneralHealth = /(trying|want|need|looking)\s+to\s+(eat|be)\s+(healthier|healthy|better)/i.test(message) ||
+                                /eat\s+(healthier|healthy|better)/i.test(message);
+        
+        if (isGeneralHealth) {
+            const reply = "That's great! 🌱 Starting a healthier journey is all about small, sustainable changes.\n\nHere's a simple tip: Try adding one extra veggie or a high-fiber grain to your meals this week. Small changes add up!\n\nWould you like some specific healthy recipe suggestions, or tips about a particular food?";
+            context.healthyFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // Use LLM to provide personalized health tips and smart swaps
+        try {
+            const healthPrompt = `The user said: "${message}"
+
+Act as a warm, positive nutrition guide. Provide friendly advice about healthier alternatives or mindful eating tips related to what they mentioned.
+
+Guidelines:
+- If they mention a specific food (chips, soda, pasta, etc.), suggest 1-2 healthier swaps
+- Keep it conversational and non-judgmental (use phrases like "Happens to all of us!" or "Small swaps can help")
+- Add one practical tip they can try
+- Use emojis sparingly (🌱 😄)
+- Keep response to 2-3 short paragraphs
+- End with: "Want me to share some healthy recipe ideas, or any other food tips?"
+
+Be encouraging and gentle, not preachy!`;
+
+            const healthResponse = await chatWithOllama(
+                healthPrompt,
+                context.messages.slice(-4),
+                [],
+                []
+            );
+
+            const reply = healthResponse || "That's a great question! Small changes like choosing whole grains, adding more veggies, or swapping sugary drinks for water can make a big difference. 🌱\n\nWant me to share some healthy recipe ideas, or any other food tips?";
+            
+            context.healthyFlow = 'gave_tips';
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        } catch (e) {
+            console.error('Healthy flow guidance error:', e);
+            const reply = "Here's a quick tip: Try swapping processed snacks for fresh fruits, nuts, or veggie sticks. Small changes add up! 🌱\n\nWant me to share some healthy recipe ideas?";
+            context.healthyFlow = 'gave_tips';
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    if (context.healthyFlow === 'gave_tips') {
+        const userResponse = message.toLowerCase().trim();
+        const wantsRecipes = /\b(yes|yeah|sure|ok|okay|yep|yup|please|show|suggest|recipe)\b/i.test(userResponse);
+        
+        if (!wantsRecipes) {
+            const reply = "Sounds good! Feel free to come back anytime you want to chat about healthier choices. 😊";
+            context.healthyFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+
+        // User wants healthy recipes
+        try {
+            const llm = await suggestWithOllama({
+                message: `Suggest 3 healthy, balanced recipes. Focus on whole foods, lean proteins, vegetables, and whole grains. Keep each recipe nutritious but delicious and practical.`,
+                context: context.messages.slice(-6),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: false,
+                requestedCount: 3
+            });
+            const recipes = enrichRecipesWithProducts(llm?.recipes || [], data.products || []);
+            recipes.slice(0,3).forEach(r => context.seenRecipes.add(r.name));
+            const reply = `Here are 3 healthy recipe ideas that are both nutritious and delicious! 🌱`;
+            context.healthyFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: recipes.slice(0,3), context };
+        } catch (e) {
+            console.error('Healthy recipe generation error:', e);
+            const reply = "I'm having trouble generating recipes right now. Try asking me again in a moment!";
+            context.healthyFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's start fresh—tap Healthy Options and tell me what's on your mind!";
+    context.healthyFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+// ============================================================
+// DAILY MENU FLOW
+// Provides a complete daily meal plan: breakfast, lunch, and dinner
+// ============================================================
+async function handleDailyMenuFlow(message, context, data) {
+    debug('handleDailyMenuFlow called. Message:', message, 'Current flow state:', context.dailyMenuFlow);
+    
+    // Always reset on trigger
+    if (message === '__DAILY_MENU_START__') {
+        debug('Resetting daily menu flow due to trigger message');
+        delete context.dailyMenuFlow;
+    }
+    
+    if (!context.dailyMenuFlow) {
+        context.dailyMenuFlow = 'generating';
+        
+        try {
+            // Generate breakfast, lunch, and dinner recipes
+            const llm = await suggestWithOllama({
+                message: `Suggest exactly 3 recipes for a complete daily menu:
+1. One breakfast recipe (light and energizing)
+2. One lunch recipe (balanced and satisfying)
+3. One dinner recipe (hearty and comforting)
+
+Make them diverse, delicious, and practical for everyday cooking. Label each with its meal type.`,
+                context: context.messages.slice(-4),
+                recipeCatalog: data.recipes || [],
+                productList: data.products || [],
+                avoidNames: Array.from(context.seenRecipes || []),
+                groundedMode: false,
+                requestedCount: 3
+            });
+
+            let recipes = llm?.recipes || [];
+            
+            // Ensure we have exactly 3 recipes with proper meal types
+            if (recipes.length >= 3) {
+                recipes[0].mealType = recipes[0].mealType || 'breakfast';
+                recipes[1].mealType = recipes[1].mealType || 'lunch';
+                recipes[2].mealType = recipes[2].mealType || 'dinner';
+            }
+            
+            recipes = enrichRecipesWithProducts(recipes, data.products || []);
+            recipes.slice(0, 3).forEach(r => context.seenRecipes.add(r.name));
+            
+            const reply = "🍽️ **Full Day Menu**\n\n**What I do:** I create a complete daily meal plan with one recipe for breakfast, one for lunch, and one for dinner—giving you a full day of delicious, balanced meals!\n\n---\n\nHere's your complete menu for the day:";
+            context.dailyMenuFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: recipes.slice(0, 3), context };
+        } catch (e) {
+            console.error('Daily menu generation error:', e);
+            const reply = "I'm having trouble generating your daily menu right now. Try asking me again in a moment!";
+            context.dailyMenuFlow = null;
+            context.messages.push({ from: 'bot', text: reply });
+            return { reply, recipes: [], context };
+        }
+    }
+
+    const reply = "Let's start fresh—tap Full Day Menu for a complete breakfast, lunch, and dinner plan!";
+    context.dailyMenuFlow = null;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
 async function processMessage(message, data, context = {}) {
     try {
         debug('\n=== Processing Message ===');
@@ -1136,26 +1985,129 @@ async function processMessage(message, data, context = {}) {
         context.messages.push({ from: 'user', text: message });
 
         // ============================================================
+        // FLOW RESET: Clear other flows when a new trigger is detected
+        // ============================================================
+        const triggers = ['__NUTRITION_START__', '__BUDGET_START__', '__TIME_START__', '__PANTRY_START__', '__MEAL_PREP_START__', '__HEALTHY_START__', '__DAILY_MENU_START__'];
+        if (triggers.includes(message)) {
+            debug('Detected flow trigger:', message, '- Clearing all other flow states');
+            // Clear all flow states except the one being triggered
+            if (message !== '__NUTRITION_START__') {
+                delete context.nutritionFlow;
+                delete context.nutritionData;
+            }
+            if (message !== '__BUDGET_START__') {
+                delete context.budgetFlow;
+                delete context.budget;
+                delete context.servings;
+            }
+            if (message !== '__TIME_START__') {
+                delete context.timeFlow;
+                delete context.minutes;
+            }
+            if (message !== '__PANTRY_START__') {
+                delete context.pantryFlow;
+                delete context.pantryItems;
+            }
+            if (message !== '__MEAL_PREP_START__') {
+                delete context.mealPrepFlow;
+                delete context.mealPrepPreference;
+            }
+            if (message !== '__HEALTHY_START__') {
+                delete context.healthyFlow;
+            }
+            if (message !== '__DAILY_MENU_START__') {
+                delete context.dailyMenuFlow;
+            }
+        }
+
+        // ============================================================
+        // SPECIAL INTERACTIVE FEATURES
+        // ============================================================
+        
+        // Nutrition Coach Flow
+        if (message === '__NUTRITION_START__' || context.nutritionFlow) {
+            return await handleNutritionFlow(message, context, data);
+        }
+
+        // Budget Planner Flow
+        if (message === '__BUDGET_START__' || context.budgetFlow) {
+            return await handleBudgetFlow(message, context, data);
+        }
+
+        // Time Saver Flow
+        if (message === '__TIME_START__' || context.timeFlow) {
+            return await handleTimeFlow(message, context, data);
+        }
+
+        // Pantry Helper Flow
+        if (message === '__PANTRY_START__' || context.pantryFlow) {
+            return await handlePantryFlow(message, context, data);
+        }
+
+        // Meal Prep Flow
+        if (message === '__MEAL_PREP_START__' || context.mealPrepFlow) {
+            debug('Meal Prep Flow triggered. Message:', message, 'Flow state:', context.mealPrepFlow);
+            return await handleMealPrepFlow(message, context, data);
+        }
+
+        // Healthy Options Flow
+        if (message === '__HEALTHY_START__' || context.healthyFlow) {
+            debug('Healthy Options Flow triggered. Message:', message, 'Flow state:', context.healthyFlow);
+            return await handleHealthyFlow(message, context, data);
+        }
+
+        // Daily Menu Flow
+        if (message === '__DAILY_MENU_START__' || context.dailyMenuFlow) {
+            debug('Daily Menu Flow triggered. Message:', message, 'Flow state:', context.dailyMenuFlow);
+            return await handleDailyMenuFlow(message, context, data);
+        }
+
+        // ============================================================
         // OPTION A: LLM-FIRST ARCHITECTURE
         // Let the AI understand intent naturally, then decide if we need recipe cards
         // ============================================================
 
         // 1. Special case: Shopping list actions (explicit add commands)
-        const isShoppingAction = /add( to)? shopping|add( to)? list|shopping list|cart|buy|purchase|add ingredients/i.test(message);
+        // More specific regex - only trigger if user explicitly says "add to" or "add ingredients"
+        const isShoppingAction = /(add( to)? (shopping|list|cart)|add ingredients|put (in|on) (shopping )?list|\b(add|put)\b[\s,\-]*.+?\b(in|into|to|on)\b\s+(my\s+)?((shopping\s+)?(list|cart)))/i.test(message);
         
         if (isShoppingAction) {
-            // Extract ingredients from the message
-            const ingredientTexts = parseIngredientsFromText(message, data.products);
-            const ingredients = ingredientTexts.map(name => ({ name }));
+            // Prefer a database search to identify concrete products, then fall back to text parsing
+            let searchHits = [];
+            try { searchHits = searchProductsInDatabase(message, data.products || []); } catch {}
 
-            // Add to shopping list (upsert)
-            const updatedShoppingList = mergeRecipeHistory(context.seenRecipes, ingredients);
+            let ingredients = [];
+            if (Array.isArray(searchHits) && searchHits.length > 0) {
+                ingredients = searchHits.slice(0, 10).map(h => ({ name: h.item, products: [{ price: h.price }] }));
+            } else {
+                const ingredientTexts = parseIngredientsFromText(message, data.products);
+                ingredients = ingredientTexts.map(name => {
+                    const lname = (name||'').toLowerCase();
+                    const prod = (data.products || []).find(p => {
+                        const item = (p.item||'').toLowerCase();
+                        return item === lname || lname.includes(item) || item.includes(lname);
+                    });
+                    const price = prod?.price;
+                    return price != null && isFinite(price)
+                        ? { name, products: [{ price }] }
+                        : { name };
+                });
+            }
 
-            // Update context
-            context.seenRecipes = new Set(updatedShoppingList.map(i => i.name));
-            context.messages.push({ from: 'bot', text: `I've added those ingredients to your shopping list!` });
-            
-            return { reply: `I've added those ingredients to your shopping list!`, recipes: [], context };
+            // Persist last shopping action for context (optional)
+            context.lastAddedIngredients = ingredients.map(i => ({ name: i.name }));
+
+            const count = ingredients.length;
+            const names = ingredients.slice(0, 3).map(i => i.name).join(', ');
+            const replyText = count > 0
+                ? `I found **${names}**${count > 3 ? ' and more' : ''}! You can click the **+** button next to each item in the Products panel on the right to add them to your shopping list.`
+                : `I couldn't find those items in stock. Try browsing the **Products** panel on the right to add what you need!`;
+
+            context.messages.push({ from: 'bot', text: replyText });
+
+            // Return WITHOUT a 'shopping' payload so the frontend doesn't try to auto-add
+            // User will manually click + in Products panel
+            return { reply: replyText, recipes: [], context };
         }
 
         // 2. Selection intent: ALWAYS handle first and return a single card
@@ -1211,19 +2163,57 @@ async function processMessage(message, data, context = {}) {
             }
         }
 
-        // 3. Let the LLM handle the conversation naturally FIRST
+        // 3. PRODUCT SEARCH: Check if the query involves products and search the database
+        let isProductQuery = detectProductQuery(message);
+        let productSearchResults = [];
+
+        // Detect follow-ups that reference prior product results (e.g., "cheapest", "under $10", "those")
+        const followUpInfo = detectProductFollowUp(message);
+        const hasPriorProducts = Array.isArray(context.lastProductResults) && context.lastProductResults.length > 0;
+
+        if (isProductQuery) {
+            debug('Product query detected, searching database...');
+            productSearchResults = searchProductsInDatabase(message, data.products || []);
+            debug(`Found ${productSearchResults.length} matching products`);
+            // Persist for follow-ups
+            context.lastProductQuery = message;
+            context.lastProductResults = productSearchResults;
+        } else if (followUpInfo.isFollowUp && hasPriorProducts) {
+            debug('Follow-up about products detected; using last product results');
+            isProductQuery = true; // treat as product-related for downstream logic
+            productSearchResults = Array.from(context.lastProductResults);
+
+            // Apply simple follow-up transforms: cheapest / most expensive / under $X
+            if (followUpInfo.intent === 'cheapest') {
+                productSearchResults.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+                productSearchResults = productSearchResults.slice(0, 3);
+            } else if (followUpInfo.intent === 'expensive') {
+                productSearchResults.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
+                productSearchResults = productSearchResults.slice(0, 3);
+            }
+            if (Number.isFinite(followUpInfo.priceUnder)) {
+                productSearchResults = productSearchResults.filter(p => Number.isFinite(p.price) && p.price <= followUpInfo.priceUnder);
+            }
+        }
+
+        // 4. Let the LLM handle the conversation naturally, with product context if applicable
         debug('Consulting LLM for natural response...');
         let llmResponse;
         try {
+            // Enhance user message with a brief, structured context summary to aid the model
+            const enhancedMessage = buildLLMUserMessage(message, context, productSearchResults);
+
+            // Pass products via the dedicated products argument so the model can ground responses
             llmResponse = await chatWithOllama(
-                message,
+                enhancedMessage,
                 context.messages.slice(0, -1), // Don't duplicate the message we just added
                 [],
-                []
+                productSearchResults.length > 0 ? productSearchResults : []
             );
         } catch (error) {
-            warn('LLM consultation failed:', error.message);
-            llmResponse = "I'm having a bit of trouble thinking right now. Could you try again?";
+            console.error('LLM consultation failed:', error);
+            console.error('Error details:', error.message, error.stack);
+            llmResponse = `Error: ${error.message || 'Unknown error occurred'}. Please check the server logs for details.`;
         }
 
         // Normalize LLM response
@@ -1358,9 +2348,21 @@ async function processMessage(message, data, context = {}) {
                 }
             }
             
+            // Helper: detect strict grounded-only intent even without the word "only"
+            function detectGroundedOnlyIntent(text){
+                const t = (text||'').toLowerCase();
+                return (
+                    /\b(use|create|make|generate|give|show)\b[^\n]*\b(recipes?|dishes?|meals?)\b[^\n]*\b(with|using|based on|from)\b[^\n]*\b(products?|items?|stock|catalog|list)\b[^\n]*\b(we|you|our|your)\b/i.test(t)
+                    || /\b(use|using)\b[^\n]*\b(current|available|in\s*stock|right\s*now)\b[^\n]*\b(products?|items?)\b/i.test(t)
+                    || /\bfrom\s+(your|our)\s+(products?|stock|catalog|list)\b/i.test(t)
+                    || /\bonly\s+from\s+(the\s+)?(catalog|product\s*list|stock)\b/i.test(t)
+                );
+            }
+
             // Not a selection - generate recipe cards via structured LLM call
             const isMore = /^(more|show me more|give me more)$/i.test(message.trim());
             const userQuery = isMore ? (context.lastNonMoreQuery || message) : message;
+            const budgetCap = parseBudgetCap(userQuery);
 
             // Extract requested recipe count (e.g., "3 protein rich recipes" -> 3)
             const countMatch = userQuery.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i);
@@ -1374,12 +2376,21 @@ async function processMessage(message, data, context = {}) {
                 requestedCount = isNaN(num) ? (numberWords[num] || 3) : Math.min(parseInt(num), 10);
             }
 
+            // Enforce a hard cap of 3 recipes for UI/readability/token reasons
+            const userAskedOverCap = requestedCount > 3;
+            const cappedCount = Math.min(requestedCount, 3);
+
             // Detect themed/creative requests (halloween, christmas, spooky, romantic, party-themed, etc.)
             const isThemedRequest = /(halloween|christmas|thanksgiving|easter|valentine|romantic|spooky|scary|festive|party|celebration|birthday|anniversary|themed|creative|fancy|gourmet|fusion|unique|unusual|weird|fun)\s+(recipe|dish|meal|food|idea)/i.test(userQuery) ||
                                     /(recipe|dish|meal|food|idea)\s+(for|themed|style)\s+(halloween|christmas|thanksgiving|easter|valentine|party|celebration|birthday|anniversary)/i.test(userQuery);
 
             // Detect grounded mode (user wants only in-catalog ingredients)
-            const groundedMode = /(only\s+(use\s+)?(store|catalog|available|in\s+stock|my\s+list|product)s?)|(use\s+only\s+(what|ingredients)\s+(i\s+have|we\s+carry))|\bgrounded\b|\bonly\s+from\s+(the\s+)?catalog\b/i.test(userQuery);
+            const groundedMode = /(only\s+(use\s+)?(store|catalog|available|in\s+stock|my\s+list|product)s?)|(use\s+only\s+(what|ingredients)\s+(i\s+have|we\s+carry))|\bgrounded\b|\bonly\s+from\s+(the\s+)?catalog\b/i.test(userQuery)
+                || detectGroundedOnlyIntent(userQuery)
+                || !!context.groundedOnly;
+
+            // Remember user's preference for subsequent follow-ups in this session
+            if (groundedMode) context.groundedOnly = true;
 
             let llmResultJson = null;
             try {
@@ -1388,9 +2399,13 @@ async function processMessage(message, data, context = {}) {
                     ? `${userQuery}\n\nIMPORTANT: I've already seen these recipes, so please suggest COMPLETELY DIFFERENT ones: ${Array.from(context.seenRecipes || []).join(', ')}`
                     : userQuery;
                 
-                // Add explicit count instruction if user specified a number
-                if (requestedCount && requestedCount !== 3) {
-                    promptMessage = `${promptMessage}\n\nIMPORTANT: Generate exactly ${requestedCount} ${requestedCount === 1 ? 'recipe' : 'recipes'}.`;
+                // Add explicit count instruction using the capped count
+                if (cappedCount !== 3 || userAskedOverCap) {
+                    promptMessage = `${promptMessage}\n\nIMPORTANT: Generate exactly ${cappedCount} ${cappedCount === 1 ? 'recipe' : 'recipes'} (the app shows up to 3 at a time).`;
+                }
+                // If a budget cap is present in the user's query, add a strict constraint
+                if (Number.isFinite(budgetCap)) {
+                    promptMessage = `${promptMessage}\n\nSTRICT BUDGET: Only include recipes whose total ingredient cost is $${budgetCap} or less. Prefer fewer, cheaper ingredients. If none fit strictly under $${budgetCap}, say so briefly.`;
                 }
                     
                 llmResultJson = await suggestWithOllama({
@@ -1400,7 +2415,7 @@ async function processMessage(message, data, context = {}) {
                     productList: Array.isArray(data.products) ? data.products : [],
                     avoidNames: [], // Don't pass avoidNames, we're handling it in the prompt
                     groundedMode,
-                    requestedCount // Pass the count to LLM
+                    requestedCount: cappedCount // Pass the capped count to the LLM
                 });
             } catch (e) {
                 warn('LLM structured suggestion failed, will fallback to dataset scorer:', e.message);
@@ -1477,7 +2492,42 @@ async function processMessage(message, data, context = {}) {
 
             // Limit to 3 items and enrich with product availability
             const limited = (llmRecipes || []).slice(0, 3);
-            const enriched = enrichRecipesWithProducts(limited, data.products || []);
+            let enriched = enrichRecipesWithProducts(limited, data.products || []);
+
+            // In strict grounded mode, drop any recipe that contains an ingredient not in our product list
+            if (groundedMode) {
+                const before = enriched.length;
+                enriched = enriched.filter(r => Array.isArray(r.ingredients) && r.ingredients.every(i => i && i.found));
+                debug(`Grounded-only filter: ${enriched.length}/${before} recipes kept (all ingredients available)`);
+                if (enriched.length === 0) {
+                    const msg = "I couldn't compose a recipe using only the products in stock. Want me to relax the rule slightly or show budget/quick ideas using mostly in-stock items?";
+                    context.messages.push({ from: 'bot', text: msg });
+                    return { reply: msg, recipes: [], context };
+                }
+            }
+
+            // Enforce strict budget cap if present
+            let budgetNote = '';
+            if (Number.isFinite(budgetCap)) {
+                const before = enriched.length;
+                const under = filterRecipesByBudget(enriched, budgetCap);
+                if (under.length > 0) {
+                    enriched = under;
+                    debug(`Budget cap filter ($${budgetCap}) kept ${enriched.length}/${before} recipes`);
+                } else {
+                    // No recipes under the cap; show none, and prepare a helpful note with closest options
+                    const closest = sortByCheapest(enriched).slice(0, 3);
+                    if (closest.length > 0) {
+                        const lines = closest.map(r => `• ${r.name} — ~$${estimateRecipeCost(r).toFixed(2)}`).join('\n');
+                        budgetNote = `\n\nI couldn't find recipes strictly under $${budgetCap} with current prices. Here are the closest options (slightly over):\n${lines}\n\nReply like 'relax to $${Math.ceil(budgetCap + 2)}' to expand the cap.`;
+                        // We will still return the closest options but clearly labeled as above budget
+                        enriched = closest;
+                    } else {
+                        budgetNote = `\n\nI couldn't find any recipes close to this budget using current prices.`;
+                        enriched = [];
+                    }
+                }
+            }
 
             // Update context and reply
             const names = enriched.map(r => r.name).filter(Boolean);
@@ -1485,24 +2535,56 @@ async function processMessage(message, data, context = {}) {
             context.allSuggestedRecipes = mergeRecipeHistory(context.allSuggestedRecipes, enriched);
             if (!isMore) context.lastNonMoreQuery = userQuery;
 
-            // Use the structured reply from JSON generation, or the initial LLM response if it mentioned recipes
-            // But if the LLM response contains JSON artifacts (curly braces), prefer a clean generated reply
-            let finalReply = (structuredReply && structuredReply.trim()) 
-                ? structuredReply 
-                : (llmReplyText && llmReplyText.trim() && !llmHasJsonArtifacts
-                    ? llmReplyText 
-                    : buildReplyFromSuggestions(userQuery, enriched, context, { isMore, exhausted: enriched.length === 0 }));
+            // Always synchronize the reply with the actual number of recipes returned
+            // to avoid "Here are 4" vs 3-card mismatches.
+            const countSyncedReply = buildReplyFromSuggestions(userQuery, enriched, context, { isMore, exhausted: enriched.length === 0 });
+
+            // If the LLM provided a reasoning string, we’ll append it after our count-synced reply.
+            let finalReply = countSyncedReply;
+
+            if (userAskedOverCap) {
+                finalReply = `${finalReply}\n\nNote: I can show up to 3 recipes per response to keep the chat readable and responsive (and to stay within the model's token budget). Click "More" for additional options.`;
+            }
             
             // Append reasoning if available
             if (reasoning && reasoning.trim()) {
                 finalReply = `${finalReply}\n\n💡 ${reasoning.trim()}`;
             }
 
+            if (groundedMode) {
+                finalReply = `${finalReply}\n\n✓ Using only products currently available in stock.`;
+            }
+            if (budgetNote) {
+                finalReply = `${finalReply}${budgetNote}`;
+            }
             context.messages.push({ from: 'bot', text: finalReply });
             return { reply: finalReply, recipes: enriched, context };
         }
         
-        // 5. No recipe cards needed - however, if the conversational reply contained a recipe-like JSON,
+        // 5. If this was a product query, enhance the response with product information
+        if (isProductQuery && productSearchResults.length > 0) {
+            debug('Enhancing response with product search results');
+            // Create a formatted product list to append
+            const productList = productSearchResults.map(p => 
+                `• ${p.item} - $${p.price.toFixed(2)} (${p.category})`
+            ).join('\n');
+            
+            // If the LLM response is generic or asks for product list, replace with actual results
+            const isGenericResponse = /could you share|what.*do you have|show me.*list|product list/i.test(llmReplyText);
+            
+            if (isGenericResponse) {
+                const enhancedReply = `Here are the products I found in our database:\n\n${productList}\n\nWould you like to know more about any of these?`;
+                context.messages.push({ from: 'bot', text: enhancedReply });
+                return { reply: enhancedReply, recipes: [], context, products: productSearchResults };
+            } else {
+                // LLM already incorporated the products, just append them for clarity
+                const enhancedReply = `${llmReplyText}\n\nAvailable products:\n${productList}`;
+                context.messages.push({ from: 'bot', text: enhancedReply });
+                return { reply: enhancedReply, recipes: [], context, products: productSearchResults };
+            }
+        }
+
+        // 6. No recipe cards needed - however, if the conversational reply contained a recipe-like JSON,
         // attempt to parse and convert to a proper card to avoid leaking JSON to the UI.
         if (llmHasJsonArtifacts) {
             try {
@@ -1520,7 +2602,7 @@ async function processMessage(message, data, context = {}) {
         }
 
         // Otherwise, return the conversational LLM response
-        debug('Returning conversational response without recipe cards');
+    debug('Returning conversational response without recipe cards');
         context.messages.push({ from: 'bot', text: llmReplyText });
         return { reply: llmReplyText, recipes: [], context };
 
@@ -1529,6 +2611,138 @@ async function processMessage(message, data, context = {}) {
         console.error(error.stack);
         throw error;
     }
+}
+
+// ============================================================
+// PRODUCT SEARCH FUNCTIONS
+// ============================================================
+
+/**
+ * Detect if the user's message is asking about products/ingredients
+ */
+function detectProductQuery(message) {
+    const msg = message.toLowerCase();
+    
+    // Direct product queries
+    const productKeywords = [
+        // Questions about products
+        /what\s+(kind\s+of\s+)?(\w+\s+)?(products?|items?|ingredients?|foods?|groceries)\s+(do\s+you\s+have|are\s+available|in\s+stock)/i,
+        /do\s+you\s+(have|carry|sell|stock)\s+/i,
+        /show\s+me\s+(some\s+|your\s+|all\s+)?(\w+\s+)?(products?|items?|ingredients?|oils?|cheese|milk|eggs?|meat|vegetables?|fruits?)/i,
+        /what\s+(\w+\s+)?(oils?|cheese|milk|eggs?|meat|vegetables?|fruits?|bread|pasta|rice)\s+(do\s+you\s+have|are\s+available)/i,
+        
+        // Shopping/buying intent about specific products
+        /(good|best|healthy|cheap|affordable)\s+(\w+\s+)?(oils?|cheese|milk|eggs?|meat|vegetables?|fruits?|bread|pasta|rice|yogurt|butter|flour|sugar|salt|pepper|spices?)/i,
+        /where\s+(can\s+i\s+find|is)\s+/i,
+        /looking\s+for\s+/i,
+        
+        // Price queries
+        /how\s+much\s+(is|does|are|cost)/i,
+        /price\s+(of|for)/i,
+        
+        // Specific product categories
+        /(oils?|cheese|milk|eggs?|meat|chicken|beef|pork|fish|vegetables?|fruits?|bread|pasta|rice|yogurt|butter|flour|sugar|salt|pepper|spices?)\s+(i\s+can\s+)?(buy|purchase|get)/i,
+    ];
+    
+    // Check if any pattern matches
+    for (const pattern of productKeywords) {
+        if (pattern.test(msg)) {
+            return true;
+        }
+    }
+    
+    // Also detect product names directly (common grocery items)
+    const commonProducts = [
+        'oil', 'olive oil', 'canola oil', 'vegetable oil', 'coconut oil',
+        'cheese', 'cheddar', 'mozzarella', 'parmesan',
+        'milk', 'yogurt', 'butter', 'cream',
+        'eggs', 'egg',
+        'chicken', 'beef', 'pork', 'fish', 'salmon', 'tuna',
+        'bread', 'flour', 'rice', 'pasta',
+        'tomato', 'onion', 'garlic', 'potato',
+        'apple', 'banana', 'orange',
+        'salt', 'pepper', 'sugar'
+    ];
+    
+    const hasProductMention = commonProducts.some(product => msg.includes(product));
+    const hasActionWord = /(buy|purchase|get|find|need|want|looking|shopping|stock|available|have|carry|sell)/i.test(msg);
+    
+    // If mentions product + action word, it's likely a product query
+    if (hasProductMention && hasActionWord) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Search products in the database based on user query
+ */
+function searchProductsInDatabase(query, products) {
+    if (!products || products.length === 0) {
+        return [];
+    }
+    
+    const queryLower = query.toLowerCase();
+    const results = [];
+    
+    // Extract potential product keywords from the query
+    const words = queryLower.split(/\s+/).filter(w => w.length > 2);
+    
+    // Search for products that match query terms
+    for (const product of products) {
+        const itemLower = (product.item || '').toLowerCase();
+        const categoryLower = (product.category || '').toLowerCase();
+        
+        // Check if product name or category matches any word in the query
+        let score = 0;
+        
+        // Exact match gets highest score
+        if (queryLower.includes(itemLower) || itemLower.includes(queryLower)) {
+            score += 10;
+        }
+        
+        // Word-by-word matching
+        for (const word of words) {
+            if (itemLower.includes(word)) {
+                score += 5;
+            }
+            if (categoryLower.includes(word)) {
+                score += 2;
+            }
+        }
+        
+        // Specific product categories
+        if (/\boils?\b/.test(queryLower) && /oil/.test(itemLower)) {
+            score += 8;
+        }
+        if (/\bcheese/.test(queryLower) && /cheese/.test(itemLower)) {
+            score += 8;
+        }
+        if (/\bmilk/.test(queryLower) && /milk/.test(itemLower)) {
+            score += 8;
+        }
+        if (/\beggs?\b/.test(queryLower) && /egg/.test(itemLower)) {
+            score += 8;
+        }
+        if (/\b(meat|chicken|beef|pork|fish)/.test(queryLower) && /(meat|chicken|beef|pork|fish|salmon|tuna)/i.test(itemLower)) {
+            score += 8;
+        }
+        
+        if (score > 0) {
+            results.push({ ...product, _score: score });
+        }
+    }
+    
+    // Sort by score (highest first) and return top matches
+    results.sort((a, b) => b._score - a._score);
+    
+    // Return top 10 results, or all if less than 10
+    return results.slice(0, 10).map(p => ({
+        category: p.category,
+        item: p.item,
+        price: p.price
+    }));
 }
 
 // Backward-compatible simple suggestion API for tests
@@ -1548,4 +2762,53 @@ function suggestRecipes(query, data, count = 3) {
 }
 
 module.exports = { processMessage, suggestRecipes };
+
+// ============================================================
+// CONTEXT + FOLLOW-UP UTILITIES FOR PRODUCTS
+// ============================================================
+
+function buildLLMUserMessage(message, context, productSearchResults = []) {
+    const parts = [];
+    // Short memory: last product query topic
+    if (context?.lastProductQuery) {
+        parts.push(`Previous product topic: ${context.lastProductQuery}`);
+    }
+    // Preferences gleaned from conversation
+    try {
+        const conv = analyzeConversationContext(context);
+        const prefs = [];
+        if (conv?.wantsBudget) prefs.push('budget-friendly');
+        if (conv?.wantsHealthy) prefs.push('healthy');
+        if (conv?.wantsQuick) prefs.push('quick');
+        if (conv?.dietaryRestrictions?.length) prefs.push(`diet: ${conv.dietaryRestrictions.join(', ')}`);
+        if (prefs.length) parts.push(`User preferences so far: ${prefs.join('; ')}`);
+    } catch {}
+
+    if (parts.length > 0) {
+        return `${message}\n\nContext: ${parts.join(' | ')}`;
+    }
+    return message;
+}
+
+function detectProductFollowUp(message) {
+    const text = (message || '').toLowerCase();
+    const info = { isFollowUp: false, intent: null, priceUnder: NaN };
+
+    if (/\bcheapest\b|\blower(?:est)?\s+price\b/.test(text)) {
+        info.isFollowUp = true; info.intent = 'cheapest';
+    } else if (/\b(most\s+expensive|priciest|highest\s+price)\b/.test(text)) {
+        info.isFollowUp = true; info.intent = 'expensive';
+    }
+
+    const underMatch = text.match(/\bunder\s*\$?\s*(\d+(?:\.\d{1,2})?)\b/);
+    if (underMatch) {
+        info.isFollowUp = true; info.priceUnder = parseFloat(underMatch[1]);
+    }
+
+    // Pronouns indicating reference to prior list
+    if (!info.isFollowUp && /\b(these|those|them|the\s+ones|any\s+of\s+them)\b/.test(text)) {
+        info.isFollowUp = true;
+    }
+    return info;
+}
 

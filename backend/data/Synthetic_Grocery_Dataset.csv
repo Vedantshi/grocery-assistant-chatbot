@@ -1,0 +1,101 @@
+item_name,category,price,unit,calories,protein_g,carbs_g,fat_g,fiber_g
+Frozen Waffles,Frozen,3.54,per bottle,471,11.9,38.6,10.1,8.8
+Cream,Dairy,11.91,per bottle,274,21.5,50.5,18.2,7.6
+Muffin,Bakery,16.95,per pack,218,27.3,29.1,18.0,8.4
+Granola Bar,Snacks,14.67,per box,105,26.8,18.4,15.5,2.4
+Cream,Dairy,1.69,per pack,433,8.3,24.6,2.0,7.2
+Olive Oil,Pantry,6.67,per dozen,448,26.6,14.1,22.5,7.0
+Milk,Dairy,6.91,per bottle,181,12.1,64.2,12.9,8.4
+Granola Bar,Snacks,12.22,per dozen,224,13.0,35.2,15.0,4.2
+Crackers,Snacks,18.88,per pack,471,27.4,60.2,4.2,8.8
+Potato,Produce,7.59,per bottle,87,0.1,4.9,1.4,7.4
+Lamb,Meat & Seafood,17.39,per pack,110,1.0,62.5,21.5,0.9
+Apple,Produce,14.17,per bottle,157,23.9,58.0,7.8,6.6
+Cola,Beverages,10.2,per dozen,310,5.4,58.4,17.1,3.4
+Honey,Pantry,10.06,per bottle,224,9.6,53.9,9.3,4.6
+Iced Tea,Beverages,7.62,per dozen,54,28.2,25.7,16.0,1.2
+Frozen Fries,Frozen,2.23,per box,288,24.7,61.5,2.3,5.7
+Frozen Pasta,Frozen,4.8,per pack,286,16.6,51.9,10.0,7.3
+Rice Cakes,Snacks,8.17,per bottle,288,18.7,5.1,16.6,1.4
+Rice,Pantry,10.76,per dozen,330,16.2,70.8,21.4,2.2
+Pork Chops,Meat & Seafood,19.19,per box,240,22.9,66.9,16.6,4.6
+Broccoli,Produce,10.09,per pack,101,11.4,44.2,6.0,1.9
+Sugar,Pantry,3.6,per dozen,89,16.4,47.9,16.7,3.0
+Spinach,Produce,14.73,per box,240,2.8,0.4,12.3,2.6
+Muffin,Bakery,4.1,per pack,442,26.2,32.8,0.6,8.0
+Potato,Produce,5.72,per box,409,25.5,13.2,11.5,4.3
+Sparkling Water,Beverages,7.98,per box,212,11.7,27.4,6.8,5.6
+Frozen Chicken,Frozen,7.41,per bag,103,1.5,38.1,9.5,8.1
+Frozen Chicken,Frozen,16.26,per pack,469,20.3,72.9,3.1,3.5
+Green Tea,Beverages,15.61,per bag,506,15.6,18.2,5.6,5.8
+Frozen Waffles,Frozen,10.93,per bottle,525,12.1,79.6,9.3,9.4
+Onion,Produce,17.12,per bag,323,23.3,23.7,5.7,7.7
+Carrot,Produce,17.31,per bag,191,29.0,41.2,10.2,6.1
+Frozen Pasta,Frozen,6.37,per dozen,452,0.6,5.5,17.8,5.0
+Pork Chops,Meat & Seafood,19.91,per box,521,14.6,28.1,20.0,9.2
+Peanut Butter,Pantry,8.58,per lb,504,17.4,51.4,0.8,8.1
+Iced Tea,Beverages,18.55,per bag,36,5.5,38.8,2.5,7.8
+Chocolate Bar,Snacks,19.18,per pack,269,21.5,12.6,13.2,4.1
+Frozen Fries,Frozen,3.62,per box,167,9.9,18.8,7.9,4.0
+Oats,Pantry,8.97,per lb,589,23.6,38.7,10.8,2.9
+Ice Cream,Frozen,18.33,per bottle,515,13.0,71.7,17.9,4.8
+Sparkling Water,Beverages,5.82,per bottle,241,3.8,5.6,2.9,7.5
+Smoothie,Beverages,16.31,per dozen,204,16.8,19.4,23.9,3.8
+Pasta,Pantry,1.16,per lb,197,7.2,7.9,2.1,3.0
+Butter,Dairy,13.75,per pack,462,15.7,11.8,2.9,4.1
+Cola,Beverages,19.68,per bottle,151,3.8,0.2,11.3,6.5
+Crab,Meat & Seafood,18.72,per bottle,186,18.7,0.1,18.9,1.0
+Donut,Bakery,6.63,per box,224,7.8,56.1,6.5,5.8
+Frozen Fish,Frozen,12.44,per bottle,597,0.2,65.7,7.5,0.1
+Banana,Produce,9.67,per bottle,203,14.2,75.0,9.2,2.7
+Sour Cream,Dairy,10.75,per bottle,328,29.2,64.5,13.5,0.1
+Frozen Chicken,Frozen,6.32,per bag,104,24.3,31.4,22.1,7.2
+Salmon,Meat & Seafood,15.12,per pack,191,10.9,29.5,24.1,1.8
+Lamb,Meat & Seafood,15.78,per bottle,169,8.3,10.0,1.0,3.1
+Broccoli,Produce,18.52,per bag,444,15.0,71.6,23.6,5.7
+Frozen Pizza,Frozen,10.94,per pack,187,18.5,54.4,5.0,3.7
+Strawberry,Produce,17.01,per dozen,382,12.5,33.1,21.5,6.3
+Oats,Pantry,18.57,per pack,188,1.3,26.4,22.5,1.8
+Carrot,Produce,2.57,per box,521,8.9,1.4,8.7,9.9
+Orange Juice,Beverages,4.58,per lb,167,6.4,32.1,6.2,6.4
+Crackers,Snacks,14.91,per lb,486,8.9,17.0,16.1,10.0
+Cheese,Dairy,1.79,per pack,496,22.2,76.0,1.6,7.3
+Croissant,Bakery,3.01,per bag,353,5.2,77.2,12.6,6.0
+Popcorn,Snacks,2.88,per bag,544,16.7,16.2,7.7,4.4
+Cottage Cheese,Dairy,18.75,per pack,442,29.8,55.1,2.1,9.4
+Chicken Breast,Meat & Seafood,3.8,per dozen,450,10.7,53.7,22.7,3.8
+English Muffin,Bakery,19.12,per bag,450,22.0,51.6,3.5,8.6
+Oats,Pantry,18.71,per bottle,383,19.2,9.9,4.4,7.0
+Granola Bar,Snacks,7.63,per box,564,20.3,58.9,18.2,6.0
+Turkey,Meat & Seafood,18.03,per lb,330,24.7,29.4,2.9,9.9
+Donut,Bakery,12.32,per dozen,317,27.6,71.4,22.4,3.4
+Sparkling Water,Beverages,14.82,per lb,101,3.0,6.8,5.6,3.8
+Frozen Dumplings,Frozen,11.63,per lb,118,6.9,52.9,4.7,4.2
+Cottage Cheese,Dairy,12.75,per dozen,62,5.1,11.4,14.4,9.8
+Pretzels,Snacks,17.75,per bottle,87,9.1,46.8,16.3,6.6
+Shrimp,Meat & Seafood,3.62,per lb,260,1.5,5.0,22.0,9.8
+Chicken Breast,Meat & Seafood,4.27,per bottle,583,6.5,12.6,4.7,9.1
+Sugar,Pantry,6.1,per bag,252,8.7,13.2,0.5,10.0
+Oats,Pantry,6.4,per bottle,149,27.4,42.2,21.7,4.3
+Salmon,Meat & Seafood,10.18,per bottle,555,12.8,66.3,21.9,7.2
+Cheese,Dairy,15.83,per pack,176,12.7,24.2,13.9,6.2
+Iced Tea,Beverages,9.27,per bag,185,28.3,64.8,23.4,9.4
+Rice Cakes,Snacks,1.49,per lb,299,3.6,49.7,18.8,1.3
+Olive Oil,Pantry,10.26,per bag,572,16.7,19.4,22.3,8.7
+Spinach,Produce,3.74,per bag,153,14.9,63.6,24.5,5.7
+Broccoli,Produce,2.67,per bag,293,4.5,30.3,20.7,5.7
+Cola,Beverages,1.5,per pack,219,21.4,55.0,15.6,9.5
+Carrot,Produce,9.72,per box,417,28.8,28.1,22.0,8.1
+Cookies,Snacks,2.21,per pack,390,29.5,60.9,6.1,7.1
+Coffee,Beverages,17.21,per pack,553,19.2,27.2,10.8,4.7
+Butter,Dairy,3.17,per box,57,27.9,12.5,22.4,0.1
+Smoothie,Beverages,6.07,per bottle,516,8.0,24.3,13.3,9.1
+Ground Beef,Meat & Seafood,13.94,per pack,337,11.9,60.0,17.5,7.2
+Trail Mix,Snacks,2.76,per bottle,46,0.9,7.0,14.9,8.2
+Blueberry,Produce,16.68,per dozen,256,27.6,45.3,7.9,9.4
+Frozen Fries,Frozen,4.33,per pack,272,20.4,53.5,6.3,1.3
+Pita Bread,Bakery,16.58,per box,258,12.1,14.1,5.5,1.8
+Chicken Breast,Meat & Seafood,14.78,per pack,493,9.6,20.5,19.4,0.8
+Frozen Pasta,Frozen,19.59,per lb,471,27.7,9.4,9.6,8.0
+Paneer,Dairy,3.67,per bag,589,17.5,29.7,8.8,6.3
+Ghee,Dairy,4.99,per lb,371,4.9,39.3,20.5,4.2

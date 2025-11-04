@@ -1,12 +1,9 @@
 const axios = require('axios');
-// Provider selection: default to OpenAI if OPENAI_API_KEY is set and non-empty, else use local Ollama
-const hasValidOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0;
-const PROVIDER = process.env.LLM_PROVIDER || (hasValidOpenAIKey ? 'openai' : 'ollama');
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gpt-oss:120b-cloud';
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || '';
+console.log('[Ollama Configuration] URL:', OLLAMA_URL, 'Model:', OLLAMA_MODEL);
 const SYSTEM_PROMPT = `You are a helpful grocery and recipe assistant.
 
 Your core capabilities:
@@ -19,7 +16,15 @@ Your core capabilities:
 Tone & Style:
 - Warm, enthusiastic, concise (2-4 sentences), and helpful.
 - Mention recipe names naturally. Encourage clicking "Add Ingredients" for shopping list and "More" for additional ideas.
+- When you mention nutrition, keep it brief and clearly approximate. The app will display per-ingredient calories and a total based on the product dataset; don't invent precise numbers beyond rough estimates.
 - Never invent products not in the product dataset. When generating new recipes, only use available products.
+
+CRITICAL OUTPUT LIMITS:
+- You have a response limit of approximately 200-300 words due to token constraints.
+- When suggesting recipes, provide at most 3 complete recipes per response (UI space + latency constraints).
+- NEVER promise more recipes than you can deliver.
+- If asked for more than 3, explicitly say you can show up to 3 at a time and invite the user to click "More" for additional options.
+- Say "Here are 3 recipes" NOT "Here are 10 recipes".
 
 Output discipline:
 - When asked to suggest recipes, you MUST be able to produce a compact JSON result when requested, including recipes with ingredients and steps. If not explicitly requested for JSON, you may respond naturally.
@@ -76,12 +81,28 @@ async function chatWithOllama(message, context = [], recipes = [], products = []
             });
         }
         
-        // Add current user message with recipe context
+        // Add current user message with optional recipe and product context
         let userPrompt = message;
+
+        const parts = [];
+        parts.push(`User message: "${message}"`);
+
         if (recipes && recipes.length > 0) {
             const recipeNames = recipes.map(r => r.name).join(', ');
-            userPrompt = `User message: "${message}"\n\nRecipes found for this request: ${recipeNames}\n\nRespond naturally and mention these recipes by name. Keep it brief and friendly!`;
+            parts.push(`Recipes referenced: ${recipeNames}`);
         }
+
+        if (products && products.length > 0) {
+            // Limit and format products for prompt safety
+            const limited = products.slice(0, 12);
+            const lines = limited.map(p => `- ${p.item}${Number.isFinite(p.price) ? ` — $${p.price.toFixed(2)}` : ''}${p.category ? ` (${p.category})` : ''}`).join('\n');
+            parts.push(`Available products to reference (use only these, do not invent new items):\n${lines}`);
+            parts.push(`If the user refers to "these/those/cheapest/most expensive/under $X", resolve it against the product list above.`);
+        }
+        
+        parts.push(`\nREMINDER: Due to response limits, only promise 2-4 recipes maximum per response. If the user asks for many recipes, be honest and say you can provide a few at a time.`);
+
+        userPrompt = parts.join('\n\n');
         
         messages.push({ role: 'user', content: userPrompt });
 
@@ -92,16 +113,17 @@ async function chatWithOllama(message, context = [], recipes = [], products = []
             stream: false,
             options: {
                 temperature: 0.7,
-                num_predict: 300 // Increased from 150 to allow complete responses
+                num_predict: 1000 // Increased to allow longer complete responses
             }
         }, {
-            timeout: 60000, // 60 second timeout (increased from 30s for slower responses)
+            timeout: 120000, // 120 second timeout for larger model responses
             headers: OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : undefined
         });
 
         console.log('Ollama response received');
         return response.data.message.content;
     } catch (error) {
+        console.error('Ollama chat error:', error);
         if (error.code === 'ECONNREFUSED') {
             console.error('Ollama is not running. Please start Ollama service.');
             return "I'm having trouble connecting to my AI brain 🧠. Please make sure Ollama is running! You can start it with 'ollama serve' in your terminal.";
@@ -110,20 +132,21 @@ async function chatWithOllama(message, context = [], recipes = [], products = []
             console.error('Ollama request timed out');
             return "I'm taking too long to think 🤔. The AI model might be slow or overloaded. Try a simpler question or wait a moment and try again!";
         }
-        console.error('Ollama chat error:', error.message);
-        throw error; // Let the caller handle fallback
+        console.error('Full error details:', error.message, error.code, error.response?.status);
+        return `Ollama Error: ${error.message}. Check if Ollama is running and the model '${OLLAMA_MODEL}' is available.`;
     }
 }
 
 // Structured suggestion call: returns JSON with reply + recipes — Ollama implementation
 async function suggestWithOllama({ message, context = [], recipeCatalog = [], productList = [], avoidNames = [], groundedMode = false, requestedCount = 3 }) {
-        // Lightweight system prompt for fast, creative generation
-        const recipeCount = requestedCount || 3;
+    // Lightweight system prompt for fast, creative generation
+    // Cap requested count hard to 3 to match UI and token budget
+    const recipeCount = Math.min(requestedCount || 3, 3); // Never request more than 3 recipes
         let system = `You are a recipe assistant. Generate EXACTLY ${recipeCount} ${recipeCount === 1 ? 'recipe' : 'recipes'}.
 
 CRITICAL: Return ONLY valid JSON. No markdown, no text before or after. Use this EXACT format:
 {
-    "reply": "Here are ${recipeCount} recipes for you!",
+    "reply": "Here ${recipeCount === 1 ? 'is 1 recipe' : `are ${recipeCount} recipes`} for you! (I can show up to 3 at a time—ask for More if you want additional)",
     "reasoning": "Brief 1-2 sentence explanation of why these recipes were chosen based on the user's request",
     "recipes": [
         {
@@ -137,13 +160,15 @@ CRITICAL: Return ONLY valid JSON. No markdown, no text before or after. Use this
 }
 
 Rules:
-- Generate EXACTLY ${recipeCount} recipe objects in the recipes array
+- Generate EXACTLY ${recipeCount} recipe objects in the recipes array (NO MORE, NO LESS)
 - Include a "reasoning" field explaining why these recipes fit the user's request
 - Each recipe MUST have all 5 fields: name, ingredients (array), steps (array), mealType, autogenerated
 - NO trailing commas in arrays or objects
 - NO extra text outside the JSON
 - Steps must be an array of strings, not a single string
-- Common pantry items only`;
+- Common pantry items only
+- Keep recipes concise to fit within token limits
+- If the user asks for more than 3 recipes, politely explain that the app can show at most 3 per response and suggest they click "More" for additional options.`;
 
         // Grounded mode optionally constrains ingredients strictly to the product list
         let groundedAppendix = '';
@@ -151,7 +176,7 @@ Rules:
             // Compress productList to a simple unique name list (limit to avoid huge prompts)
             const names = Array.from(new Set((productList || []).map(p => (p.item || '').toString().trim()).filter(Boolean)));
             const limited = names.slice(0, 300); // cap for safety
-            groundedAppendix = `\n\nIMPORTANT (Grounded Mode): Only use ingredients from THIS allowed list. Do not include anything else. If something is missing, propose a substitution from this list.\nAllowed products (names, case-insensitive):\n- ${limited.join('\n- ')}`;
+            groundedAppendix = `\n\nIMPORTANT (Grounded Mode): Use ONLY ingredients from the list below. Do NOT invent new items or synonyms. Prefer the exact names as written (e.g., use "Pasta" not "spaghetti" if only "Pasta" appears). If a requested item isn't present, replace it with the closest option from this list or omit it.\nALL INGREDIENTS in each recipe MUST be a subset of this allowed list.\nAllowed products (case-insensitive exact names):\n- ${limited.join('\n- ')}`;
         }
 
         // Avoid repeating already-suggested recipe names
@@ -179,8 +204,8 @@ Rules:
             messages,
             stream: false,
             format: 'json',
-            options: { temperature: groundedMode ? 0.3 : 0.5, num_predict: 2000 }
-        }, { timeout: 90000, headers: OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : undefined });
+            options: { temperature: groundedMode ? 0.3 : 0.5, num_predict: 3000 }
+        }, { timeout: 180000, headers: OLLAMA_API_KEY ? { Authorization: `Bearer ${OLLAMA_API_KEY}` } : undefined });
 
         const content = response?.data?.message?.content || '';
         // Attempt to locate JSON in content
@@ -218,113 +243,4 @@ Rules:
     }
 }
 
-// -------------------- OpenAI implementations --------------------
-async function chatWithOpenAI(message, context = [], recipes = [], products = []) {
-    try {
-        // Lazy import to avoid requiring when not needed
-        const OpenAI = require('openai');
-        // Allow OpenAI-compatible providers via custom base URL
-        const openai = new OpenAI({ 
-            apiKey: process.env.OPENAI_API_KEY, 
-            baseURL: process.env.OPENAI_BASE_URL || undefined 
-        });
-
-        const messages = [ { role: 'system', content: SYSTEM_PROMPT } ];
-        if (Array.isArray(context) && context.length > 0) {
-            context.forEach(msg => messages.push({
-                role: msg.from === 'user' ? 'user' : 'assistant',
-                content: msg.text
-            }));
-        }
-        let userPrompt = message;
-        if (recipes && recipes.length > 0) {
-            const recipeNames = recipes.map(r => r.name).join(', ');
-            userPrompt = `User message: "${message}"\n\nRecipes found for this request: ${recipeNames}\n\nRespond naturally and mention these recipes by name. Keep it brief and friendly!`;
-        }
-        messages.push({ role: 'user', content: userPrompt });
-
-        const resp = await openai.chat.completions.create({
-            model: OPENAI_MODEL,
-            messages,
-            temperature: 0.7,
-            max_tokens: 300
-        });
-        const content = resp?.choices?.[0]?.message?.content || '';
-        return content;
-    } catch (error) {
-        if (error?.status === 401 || /invalid api key/i.test(error?.message || '')) {
-            return "Your OpenAI API key seems invalid. Please set a valid OPENAI_API_KEY in your environment.";
-        }
-        if (/insufficient_quota|rate limit/i.test(error?.message || '')) {
-            return "The OpenAI API quota was exceeded. Please try again later or adjust your usage.";
-        }
-        console.error('OpenAI chat error:', error?.message || error);
-        throw error;
-    }
-}
-
-async function suggestWithOpenAI({ message, context = [], recipeCatalog = [], productList = [], avoidNames = [], groundedMode = false, requestedCount = 3 }) {
-    try {
-        const OpenAI = require('openai');
-        const openai = new OpenAI({ 
-            apiKey: process.env.OPENAI_API_KEY,
-            baseURL: process.env.OPENAI_BASE_URL || undefined
-        });
-
-        const recipeCount = requestedCount || 3;
-        let system = SYSTEM_PROMPT + `\n\nWhen the user asks for recipes, respond with STRICT JSON (no markdown) in this schema and generate exactly ${recipeCount} ${recipeCount === 1 ? 'recipe' : 'recipes'}:\n{
-    "reply": string,
-    "reasoning": string,
-    "recipes": [
-        {
-            "name": string,
-            "ingredients": string[],
-            "steps": string[] | string,
-            "mealType": "breakfast"|"lunch"|"dinner"|"snack"|"dessert"|"quick meal",
-            "autogenerated": true
-        }
-    ]
-}\nRules: JSON only, no backticks. Include a "reasoning" field explaining why these recipes fit the request. Prefer common pantry items. Keep steps short.`;
-
-        if (groundedMode) {
-            const names = Array.from(new Set((productList || []).map(p => (p.item || '').toString().trim()).filter(Boolean)));
-            const limited = names.slice(0, 300);
-            system += `\n\nIMPORTANT (Grounded Mode): Only use ingredients from THIS allowed list. Do not include anything else. If something is missing, propose a substitution from this list.\nAllowed products (names, case-insensitive):\n- ${limited.join('\n- ')}`;
-        }
-        const avoidList = (avoidNames || []).filter(Boolean).slice(-50);
-        if (avoidList.length > 0) {
-            system += `\n\nAvoid suggesting recipes with these names (or trivial variants): ${avoidList.join(', ')}`;
-        }
-
-        const messages = [ { role: 'system', content: system } ];
-        (context || []).slice(-6).forEach(msg => messages.push({
-            role: msg.from === 'user' ? 'user' : 'assistant',
-            content: msg.text
-        }));
-        messages.push({ role: 'user', content: message });
-
-        const resp = await openai.chat.completions.create({
-            model: OPENAI_MODEL,
-            messages,
-            temperature: groundedMode ? 0.3 : 0.5,
-            max_tokens: 500,
-            response_format: { type: 'json_object' }
-        });
-        const content = resp?.choices?.[0]?.message?.content || '{}';
-        const parsed = JSON.parse(content);
-        return parsed;
-    } catch (error) {
-        if (error?.status === 401 || /invalid api key/i.test(error?.message || '')) {
-            throw new Error('Invalid OpenAI API key');
-        }
-        console.error('OpenAI structured suggestion error:', error?.message || error);
-        throw error;
-    }
-}
-
-// Choose provider at export time
-const useOpenAI = PROVIDER === 'openai';
-const chatExport = useOpenAI ? chatWithOpenAI : chatWithOllama;
-const suggestExport = useOpenAI ? suggestWithOpenAI : suggestWithOllama;
-
-module.exports = { chatWithOllama: chatExport, suggestWithOllama: suggestExport };
+module.exports = { chatWithOllama, suggestWithOllama };

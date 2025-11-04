@@ -16,13 +16,17 @@ const debug = (...args) => { if (DEBUG) console.log(...args); };
 
 // Global error handler
 process.on('uncaughtException', (err) => {
+    console.error('!!! UNCAUGHT EXCEPTION !!!');
     console.error('Uncaught Exception:', err);
     console.error(err.stack);
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+    console.error('!!! UNHANDLED REJECTION !!!');
     console.error('Unhandled Rejection at:', promise);
     console.error('Reason:', reason);
+    process.exit(1);
 });
 
 const app = express();
@@ -88,7 +92,7 @@ app.get('/api/recipes', (req, res) => {
 
 app.get('/api/welcome', (req, res) => {
   res.json({
-    greeting: "Hi! I'm Bloom 🌱, your grocery assistant. I can help you:\n\n" +
+    greeting: "Hi! I'm Sage 🌿, your grocery assistant. I can help you:\n\n" +
               "🍳 Discover recipes for any meal or occasion\n" +
               "🛒 Find ingredients and check what's in stock\n" +
               "💡 Get cooking tips, substitutions, and alternatives\n" +
@@ -97,8 +101,8 @@ app.get('/api/welcome', (req, res) => {
               "💬 Have natural conversations about cooking and food\n\n" +
               "What would you like to cook today?",
     mascot: { 
-      name: 'Bloom', 
-      emoji: '🌱', 
+      name: 'Sage', 
+      emoji: '🌿', 
       tagline: 'Your smart grocery companion' 
     }
   });
@@ -180,7 +184,10 @@ app.post('/api/chat', async (req, res) => {
       reply: result.reply || '',
       recipes: result.recipes || [],
       sessionId,
-      context: safeContext
+      context: safeContext,
+      // Optional extras from chat logic
+      shopping: result.shopping || undefined,
+      products: result.products || undefined
     };
 
     debug('Sending response:', {
@@ -207,10 +214,13 @@ try {
         console.log(`Backend listening on http://${addr.address}:${addr.port} (bound to ${host})`);
     });
 
-    server.on('error', (err) => {
-        console.error('Server error:', err);
-        console.error(err.stack);
-        process.exit(1);
+  server.on('error', (err) => {
+    console.error('!!! SERVER ERROR OCCURRED !!!');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error code:', err.code);
+    console.error('Error stack:', err.stack);
+    process.exit(1);
     });
 } catch (err) {
     console.error('Failed to start server:', err);
