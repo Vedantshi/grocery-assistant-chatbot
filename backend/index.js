@@ -115,6 +115,8 @@ app.get('/api/welcome', (req, res) => {
     greeting: `${timeGreeting}! I'm Sage 🌿\n\n` +
               `I'm your personal food & health companion—here to make grocery shopping easier, ` +
               `help you eat better, and save time and money along the way.\n\n` +
+              `I can guide you on **nutrition**, help you **understand your calorie needs**, suggest **smart food swaps**, ` +
+              `and give you **practical tips** on meal planning, ingredient storage, and eating mindfully.\n\n` +
               `Whether you're **watching your budget**, **short on time**, **eating healthier**, ` +
               `or just **figuring out what to make with what you have**—I've got you covered.\n\n` +
               `${suggestionEmoji} **${contextualMessage}**\n\n` +
