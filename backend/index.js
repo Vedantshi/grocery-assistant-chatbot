@@ -91,19 +91,43 @@ app.get('/api/recipes', (req, res) => {
 });
 
 app.get('/api/welcome', (req, res) => {
+  // Dynamic greetings based on time of day
+  const hour = new Date().getHours();
+  let timeGreeting;
+  let suggestionEmoji;
+  let contextualSuggestion;
+  
+  if (hour < 12) {
+    timeGreeting = "Good morning";
+    suggestionEmoji = "☕";
+    contextualSuggestion = "breakfast ideas or meal prep for the week";
+  } else if (hour < 17) {
+    timeGreeting = "Good afternoon";
+    suggestionEmoji = "🥗";
+    contextualSuggestion = "lunch recipes or healthy snack options";
+  } else {
+    timeGreeting = "Good evening";
+    suggestionEmoji = "�️";
+    contextualSuggestion = "dinner recipes or quick meals";
+  }
+  
   res.json({
-    greeting: "Hi! I'm Sage 🌿, your grocery assistant. I can help you:\n\n" +
-              "🍳 Discover recipes for any meal or occasion\n" +
-              "🛒 Find ingredients and check what's in stock\n" +
-              "💡 Get cooking tips, substitutions, and alternatives\n" +
-              "📅 Plan meals with dietary preferences in mind\n" +
-              "🎯 Choose the best recipe when you need help deciding\n" +
-              "💬 Have natural conversations about cooking and food\n\n" +
-              "What would you like to cook today?",
+    greeting: `${timeGreeting}! I'm Sage 🌿, your AI-powered grocery assistant.\n\n` +
+              `**Here's what I can do for you:**\n\n` +
+              `💰 **Budget Planner** - Find recipes within your exact budget\n` +
+              `⏰ **Quick Recipes** - Meals based on your available time\n` +
+              `🥗 **Nutrition Coach** - Calculate your daily calorie needs\n` +
+              `🍅 **Pantry Helper** - Recipes from what you already have\n` +
+              `🍽️ **Meal Prep** - Plan breakfast, lunch & dinner\n` +
+              `💚 **Healthy Options** - Smart nutrition swaps & guidance\n` +
+              `📅 **Full Day Menu** - Complete daily meal plans\n\n` +
+              `${suggestionEmoji} **Quick start:** Try the buttons above, or ask me about ${contextualSuggestion}!\n\n` +
+              `*Type your question or click a button to begin...*`,
     mascot: { 
       name: 'Sage', 
       emoji: '🌿', 
-      tagline: 'Your smart grocery companion' 
+      tagline: 'Your AI-powered grocery companion',
+      timeOfDay: timeGreeting
     }
   });
 });
