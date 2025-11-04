@@ -100,7 +100,7 @@ app.get('/api/welcome', (req, res) => {
   if (hour < 12) {
     timeGreeting = "Good morning";
     suggestionEmoji = "☕";
-    contextualMessage = "Ready to start your day with a nutritious breakfast? I can also share nutrition facts, explain food benefits, or help you understand what your body needs!";
+    contextualMessage = "Ready to start your day with a nutritious breakfast? I can also share nutrition facts, explain food benefits, or help you understand what your body needs.";
   } else if (hour < 17) {
     timeGreeting = "Good afternoon";
     suggestionEmoji = "🥗";
