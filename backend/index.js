@@ -119,8 +119,7 @@ app.get('/api/welcome', (req, res) => {
               `and give you **practical tips** on meal planning, ingredient storage, and eating mindfully.\n\n` +
               `Whether you're **watching your budget**, **short on time**, **eating healthier**, ` +
               `or just **figuring out what to make with what you have**—I've got you covered.\n\n` +
-              `${suggestionEmoji} **${contextualMessage}**\n\n` +
-              `*Ask me anything about food, nutrition, or recipes—let's chat!*`,
+              `${suggestionEmoji} **${contextualMessage}**`,
     mascot: { 
       name: 'Sage', 
       emoji: '🌿', 
