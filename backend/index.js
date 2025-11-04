@@ -95,38 +95,34 @@ app.get('/api/welcome', (req, res) => {
   const hour = new Date().getHours();
   let timeGreeting;
   let suggestionEmoji;
-  let contextualSuggestion;
+  let contextualMessage;
   
   if (hour < 12) {
     timeGreeting = "Good morning";
     suggestionEmoji = "☕";
-    contextualSuggestion = "breakfast ideas or meal prep for the week";
+    contextualMessage = "Ready to start your day with a nutritious breakfast? Or maybe plan meals for the week ahead?";
   } else if (hour < 17) {
     timeGreeting = "Good afternoon";
     suggestionEmoji = "🥗";
-    contextualSuggestion = "lunch recipes or healthy snack options";
+    contextualMessage = "Looking for a healthy lunch idea or need help with tonight's dinner plans?";
   } else {
     timeGreeting = "Good evening";
-    suggestionEmoji = "�️";
-    contextualSuggestion = "dinner recipes or quick meals";
+    suggestionEmoji = "🍽️";
+    contextualMessage = "Let's find you something delicious for dinner—quick, budget-friendly, or extra healthy!";
   }
   
   res.json({
-    greeting: `${timeGreeting}! I'm Sage 🌿, your AI-powered grocery assistant.\n\n` +
-              `**Here's what I can do for you:**\n\n` +
-              `💰 **Budget Planner** - Find recipes within your exact budget\n` +
-              `⏰ **Quick Recipes** - Meals based on your available time\n` +
-              `🥗 **Nutrition Coach** - Calculate your daily calorie needs\n` +
-              `🍅 **Pantry Helper** - Recipes from what you already have\n` +
-              `🍽️ **Meal Prep** - Plan breakfast, lunch & dinner\n` +
-              `💚 **Healthy Options** - Smart nutrition swaps & guidance\n` +
-              `📅 **Full Day Menu** - Complete daily meal plans\n\n` +
-              `${suggestionEmoji} **Quick start:** Try the buttons above, or ask me about ${contextualSuggestion}!\n\n` +
-              `*Type your question or click a button to begin...*`,
+    greeting: `${timeGreeting}! I'm Sage 🌿\n\n` +
+              `I'm your personal food & health companion—here to make grocery shopping easier, ` +
+              `help you eat better, and save time and money along the way.\n\n` +
+              `Whether you're **watching your budget**, **short on time**, **eating healthier**, ` +
+              `or just **figuring out what to make with what you have**—I've got you covered.\n\n` +
+              `${suggestionEmoji} **${contextualMessage}**\n\n` +
+              `*Use the quick buttons above, or just chat with me naturally about what you need!*`,
     mascot: { 
       name: 'Sage', 
       emoji: '🌿', 
-      tagline: 'Your AI-powered grocery companion',
+      tagline: 'Your personal food & health companion',
       timeOfDay: timeGreeting
     }
   });
