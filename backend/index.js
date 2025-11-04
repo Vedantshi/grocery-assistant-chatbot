@@ -100,15 +100,15 @@ app.get('/api/welcome', (req, res) => {
   if (hour < 12) {
     timeGreeting = "Good morning";
     suggestionEmoji = "☕";
-    contextualMessage = "Ready to start your day with a nutritious breakfast? Or maybe plan meals for the week ahead?";
+    contextualMessage = "Ready to start your day with a nutritious breakfast? I can also share nutrition facts, explain food benefits, or help you understand what your body needs!";
   } else if (hour < 17) {
     timeGreeting = "Good afternoon";
     suggestionEmoji = "🥗";
-    contextualMessage = "Looking for a healthy lunch idea or need help with tonight's dinner plans?";
+    contextualMessage = "Looking for a healthy lunch idea? Or maybe you're curious about nutrition labels, food storage tips, or which ingredients pair well together?";
   } else {
     timeGreeting = "Good evening";
     suggestionEmoji = "🍽️";
-    contextualMessage = "Let's find you something delicious for dinner—quick, budget-friendly, or extra healthy!";
+    contextualMessage = "Let's find you something delicious for dinner! I can also explain healthy substitutions, teach you about meal timing, or answer any food-related questions.";
   }
   
   res.json({
@@ -120,7 +120,7 @@ app.get('/api/welcome', (req, res) => {
               `Whether you're **watching your budget**, **short on time**, **eating healthier**, ` +
               `or just **figuring out what to make with what you have**—I've got you covered.\n\n` +
               `${suggestionEmoji} **${contextualMessage}**\n\n` +
-              `*Use the quick buttons above, or just chat with me naturally about what you need!*`,
+              `*Ask me anything about food, nutrition, or recipes—let's chat!*`,
     mascot: { 
       name: 'Sage', 
       emoji: '🌿', 
