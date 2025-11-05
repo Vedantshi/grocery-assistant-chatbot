@@ -147,6 +147,54 @@ function Chat({onAddToList}){
   const [showQuickOptions, setShowQuickOptions] = useState(true);
   const areaRef = useRef(null);
 
+  // Heuristic to detect yes/no questions from the bot
+  function isLikelyYesNoQuestion(text) {
+    if (!text) return false;
+    const s = String(text).toLowerCase();
+    if (!s.includes('?')) return false;
+    const triggers = [
+      'yes or no', '(yes/no)', 'y/n',
+      'do you want', 'would you like', 'should i',
+      'is that okay', 'is that ok', 'does that work',
+      'proceed', 'continue', 'go ahead',
+      'is this okay', 'is this ok'
+    ];
+    return triggers.some(t => s.includes(t));
+  }
+
+  // Hard reset: clear session and reload welcome like a fresh page
+  async function resetSoft(){
+    try {
+      setIsLoading(true);
+      setThinkingSteps([]);
+      setText('');
+      // Clear session so backend creates a new one
+      try { localStorage.removeItem('sessionId'); } catch {}
+      // Clear existing chat and show quick options again
+      setMessages([]);
+      setShowQuickOptions(true);
+      // Fetch a fresh welcome message and mascot (same as initial load)
+      try {
+        const res = await axios.get(`${BACKEND_URL}/api/welcome`);
+        setMascot(res.data.mascot || { name: 'Sage', emoji: '🌿', tagline: '' });
+        setMessages([{ from: 'bot', text: res.data.greeting }]);
+      } catch {
+        setMascot({ name: 'Sage', emoji: '🌿', tagline: '' });
+        setMessages([{ from: 'bot', text: "Hi! I'm Sage �, your friendly grocery helper. What occasion are you shopping for today?" }]);
+      }
+      // Scroll to the top of the new conversation
+      setTimeout(()=>{
+        if (areaRef.current) areaRef.current.scrollTop = 0;
+      }, 0);
+    } catch (e) {
+      console.error('Reset failed:', e);
+      // Fallback: at least clear the thread locally
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   // Quick search suggestions
   const quickOptions = [
     { label: '🍽️ Full Day Menu', query: '__DAILY_MENU_START__' },
@@ -270,26 +318,128 @@ function Chat({onAddToList}){
     send(query);
   }
 
-  // Minimal, safe markdown rendering for bot text: supports **bold** and line breaks
+  // Minimal markdown rendering for bot text with table support, **bold**, and <br/>
   function renderBotText(text) {
     if (!text) return null;
+    const raw = String(text);
+
+    // Escape plain text to prevent HTML injection
     const escapeHtml = (s) => s
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    // First escape HTML, then apply markdown replacements
-    const safe = escapeHtml(String(text));
-    const withBold = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    const withBreaks = withBold.replace(/\n/g, '<br/>');
-    return <span dangerouslySetInnerHTML={{ __html: withBreaks }} />;
+
+    // Parse markdown-like tables into HTML tables
+    function convertTablesToHtml(s) {
+      const lines = s.split(/\r?\n/);
+      const parts = []; // { type: 'html'|'text', content: string }
+      let i = 0;
+      // Minimal inline markdown renderer for table cells: supports **bold** only, safely
+      function renderInlineMd(cellText) {
+        if (!cellText) return '';
+        // Mark bold placeholders first
+        const marked = String(cellText).replace(/\*\*(.+?)\*\*/g, '§§B§§$1§§/B§§');
+        // Escape everything
+        let esc = escapeHtml(marked);
+        // Restore bold tags safely
+        esc = esc.replace(/§§B§§/g, '<strong>').replace(/§§\/B§§/g, '</strong>');
+        return esc;
+      }
+      while (i < lines.length) {
+        const line = lines[i];
+        const t = line.trim();
+        const looksLikeTableRow = t.startsWith('|') && t.endsWith('|') && t.includes('|');
+        if (!looksLikeTableRow) {
+          parts.push({ type: 'text', content: line + '\n' });
+          i++;
+          continue;
+        }
+
+        // Collect contiguous table block
+        const block = [];
+        while (i < lines.length) {
+          const lt = lines[i].trim();
+          if (lt.startsWith('|') && lt.includes('|')) {
+            block.push(lines[i]);
+            i++;
+          } else {
+            break;
+          }
+        }
+
+        if (block.length >= 2) {
+          // Parse header, optional alignment, and body
+          const splitRow = (r) => r
+            .trim()
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map(c => c.trim());
+
+          const header = splitRow(block[0]);
+          let bodyStart = 1;
+          // Detect alignment row like |---|:---:|---|
+          if (/^\s*\|?\s*[:\- ]+\|[\s:|\- ]+\|?\s*$/.test(block[1])) {
+            bodyStart = 2;
+          }
+
+          const rows = block.slice(bodyStart).map(splitRow).filter(r => r.length > 0);
+
+          // Build table HTML (escaped cell content with inline **bold**)
+          const ths = header.map(h => `<th align="left">${renderInlineMd(h)}</th>`).join('');
+          const trs = rows.map(r => {
+            const cells = r.map(c => `<td>${renderInlineMd(c)}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+          }).join('');
+          const tableHtml = `\n<table class="table markdown-table" style="margin-top:6px; width:100%">\n<thead><tr>${ths}</tr></thead>\n<tbody>${trs}</tbody>\n</table>\n`;
+          parts.push({ type: 'html', content: tableHtml });
+        } else {
+          // Not a valid table block; treat as normal text
+          parts.push({ type: 'text', content: block.join('\n') + '\n' });
+        }
+      }
+      return parts;
+    }
+
+    // Convert tables first so we don't inject <br/> inside them
+    const parts = convertTablesToHtml(raw);
+    const html = parts.map(p => {
+      if (p.type === 'html') return p.content; // already safe-escaped per cell
+      const safe = escapeHtml(p.content);
+      // More robust bold detection: support **bold** and __bold__, including across line breaks
+      const withBold = safe
+        .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
+      return withBold.replace(/\n/g, '<br/>');
+    }).join('');
+
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
   function renderMessage(m, i) {
     if (m.from === 'user') {
       return <div key={i} className="chat-bubble chat-user animate__animated animate__fadeInRight">{m.text}</div>;
     } else {
+      const bubbleId = `msg-${i}`;
+      // Show the jump link ONLY for: (a) any recipe replies, or (b) conversational replies >150 words
+  const isRecipe = Array.isArray(m.recipes) && m.recipes.length > 0;
+  const wordCount = typeof m.text === 'string' ? m.text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const isLong = isRecipe || (wordCount > 300);
+      function jumpToTopOfMessage() {
+        try {
+          const area = areaRef.current;
+          const bubble = document.getElementById(bubbleId);
+          if (area && bubble) {
+            // Compute position relative to the scroll container to avoid offsetParent quirks
+            const areaRect = area.getBoundingClientRect();
+            const bubbleRect = bubble.getBoundingClientRect();
+            const top = bubbleRect.top - areaRect.top + area.scrollTop - 8;
+            area.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+          }
+        } catch {}
+      }
       return (
-        <div key={i} className="chat-bubble chat-bot animate__animated animate__fadeInLeft">
+        <div key={i} id={bubbleId} className="chat-bubble chat-bot animate__animated animate__fadeInLeft">
           <span style={{fontSize:'1.3em', marginRight:8}}>{mascot.emoji}</span>
           {renderBotText(m.text)}
           {m.recipes && m.recipes.map((r,ri)=> (
@@ -385,6 +535,19 @@ function Chat({onAddToList}){
               ) : null)}
             </div>
           ))}
+          {isLong && (
+            <div style={{marginTop:8, display:'flex', justifyContent:'flex-end'}}>
+              <button
+                className="btn btn-ghost btn-small"
+                onClick={jumpToTopOfMessage}
+                title="Scroll to the beginning of this message"
+                aria-label="Jump to top of message"
+                style={{fontSize:'0.85em'}}
+              >
+                Jump to top of message ↑
+              </button>
+            </div>
+          )}
         </div>
       );
     }
@@ -392,9 +555,22 @@ function Chat({onAddToList}){
 
   return (
     <div className="card chat-card">
-      <div style={{display:'flex',alignItems:'center',marginBottom:8,flexShrink:0}}>
-        <span style={{fontSize:'2em',marginRight:10}}>{mascot.emoji}</span>
-        <h2 className="section" style={{margin:0}}>Chat with {mascot.name}</h2>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center'}}>
+          <span style={{fontSize:'2em',marginRight:10}}>{mascot.emoji}</span>
+          <h2 className="section" style={{margin:0}}>Chat with {mascot.name}</h2>
+        </div>
+        <div>
+          <button
+            className="btn btn-danger"
+            onClick={resetSoft}
+            disabled={isLoading}
+            aria-label="Reset chat"
+            title="Reset chat"
+          >
+            Reset
+          </button>
+        </div>
       </div>
       <div className="chat-list" ref={areaRef}>
         {messages.map((m,i)=> renderMessage(m,i))}
@@ -426,6 +602,22 @@ function Chat({onAddToList}){
         )}
       </div>
       <div style={{marginTop:8,flexShrink:0}}>
+        {/* Contextual Yes/No quick replies when bot asks a yes/no question */}
+        {(() => {
+          const lastBot = [...messages].reverse().find(m => m.from === 'bot');
+          const showYesNo = !isLoading && lastBot && isLikelyYesNoQuestion(lastBot.text);
+          if (!showYesNo) return null;
+          return (
+            <div className="yesno-row" style={{marginBottom:10, display:'flex', alignItems:'center', gap:10}}>
+              <span style={{color:'var(--muted)', fontSize:'0.9em'}}>Quick reply:</span>
+              <div style={{display:'flex', gap:8}}>
+                <button className="btn btn-primary btn-small" onClick={() => send('Yes')} disabled={isLoading} aria-label="Reply Yes">Yes</button>
+                <button className="btn btn-danger-outline btn-small" onClick={() => send('No')} disabled={isLoading} aria-label="Reply No">No</button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Quick search options - shown above input before first user message */}
         {showQuickOptions && messages.length <= 1 && (
           <div style={{marginBottom:12}}>
@@ -617,7 +809,7 @@ function Shopping(){
           <span>Total: $<strong id="totalAmount">{total.toFixed(2)}</strong></span>
         </div>
         <div className="controls-row" style={{display:'flex', gap:8}}>
-          <button id="exportCsvBtn" className="btn btn-accent" onClick={exportCSV}>Export CSV</button>
+          <button id="exportCsvBtn" className="btn btn-accent-soft" onClick={exportCSV}>Export CSV</button>
           <button id="clearBtn" className="btn btn-ghost" onClick={clearAll}>Clear</button>
         </div>
       </div>

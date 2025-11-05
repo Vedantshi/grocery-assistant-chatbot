@@ -1403,17 +1403,25 @@ async function handleBudgetFlow(message, context, data) {
     
     if (!context.budgetFlow) {
         context.budgetFlow = 'awaiting_budget';
-        const reply = "💸 **Budget Planner**\n\n**What I do:** I help you find recipes that fit within your budget. Tell me your spending limit and servings needed, and I'll suggest affordable, delicious recipes that won't break the bank. I'll calculate total costs and show you the cheapest options first.\n\n---\n\nWhat is your total budget and how many servings do you need?\n\nExample: '$15 for 2 servings' or 'under $20 for 3'.";
+        const reply = "💸 **Budget Planner**\n\n**What I do:** I help you find recipes that fit within your budget. Tell me your spending limit and servings needed, and I'll suggest affordable, delicious recipes that won't break the bank. I'll calculate total costs and show you the cheapest options first.\n\n---\n\nWhat is your total budget and how many servings do you need?\n\nExample: '$35 for 2 servings'.";
         context.messages.push({ from: 'bot', text: reply });
         return { reply, recipes: [], context };
     }
 
     if (context.budgetFlow === 'awaiting_budget') {
-        const { budget, servings } = parseBudgetAndServings(message);
+        let { budget, servings } = parseBudgetAndServings(message);
+        let defaulted = false;
         if (!budget) {
-            const reply = "Please specify a dollar budget (e.g., '$15 for 2 servings').";
-            context.messages.push({ from: 'bot', text: reply });
-            return { reply, recipes: [], context };
+            const lower = String(message || '').toLowerCase();
+            const clearlyNoBudget = /(no\s+money|broke|zero\s+budget|no\s+budget|free|can('?|no)t\s+afford)/i.test(lower);
+            if (clearlyNoBudget) {
+                const reply = "Please specify a dollar budget (e.g., '$35 for 2 servings').";
+                context.messages.push({ from: 'bot', text: reply });
+                return { reply, recipes: [], context };
+            }
+            // Default to a conservative $20 cap if user didn't specify a budget
+            budget = 20;
+            defaulted = true;
         }
         context.budget = budget;
         context.servings = servings || 2;
@@ -1438,26 +1446,39 @@ async function handleBudgetFlow(message, context, data) {
                 approxCost: (r.ingredients || []).reduce((sum, ing) => sum + +(ing.products?.[0]?.price ?? 0), 0)
             }));
 
-            // Strictly enforce the user's budget in this flow (no automatic buffer)
+            // Strictly enforce the user's budget; if none, relax to <= 2x budget
             const filtered = priced.filter(r => Number.isFinite(r.approxCost) && r.approxCost <= budget + 1e-9);
 
             let final = (filtered.length > 0 ? filtered : []);
             let budgetNote = '';
+            let wasRelaxed = false;
             if (final.length === 0) {
-                // If nothing fits strictly, show up to 3 closest options but clearly label them as over budget
-                const closest = sortByCheapest(priced).slice(0, 3);
-                final = closest;
-                if (closest.length > 0) {
-                    const lines = closest.map(r => `• ${r.name} — ~$${estimateRecipeCost(r).toFixed(2)}`).join('\n');
-                    budgetNote = `\n\nI couldn't find recipes strictly under $${budget}. Here are the closest options (slightly over):\n${lines}`;
+                const withinDouble = sortByCheapest(priced)
+                    .filter(r => Number.isFinite(r.approxCost) && r.approxCost <= (budget * 2 + 1e-9))
+                    .slice(0, 3);
+                if (withinDouble.length > 0) {
+                    final = withinDouble;
+                    wasRelaxed = true;
+                    // Keep note concise; cards will show details
+                    budgetNote = `\n\nI couldn't find any recipes within $${budget}, so I slightly increased the range to show you these options. If these don't work, try reducing servings or increasing your budget.`;
                 } else {
-                    budgetNote = `\n\nI couldn't find any recipes close to this budget using current prices.`;
+                    budgetNote = `I couldn't find any recipes within $${budget}, even with a slightly increased range. Try increasing your budget or reducing servings.`;
                 }
             }
             final = final.slice(0, 3);
             final.forEach(r => context.seenRecipes.add(r.name));
 
-            const reply = `Here ${final.length === 1 ? 'is 1 recipe' : `are ${final.length} recipes`} ${filtered.length > 0 ? `within your $${budget}` : 'closest to your budget'} for ${context.servings} serving(s). I keep suggestions short due to space—ask for 'More' if you want additional options.` + budgetNote;
+            let reply;
+            if (final.length > 0) {
+                const inBudget = filtered.length > 0;
+                if (inBudget) {
+                    reply = `Here ${final.length === 1 ? 'is 1 recipe' : `are ${final.length} recipes`} within your $${budget} for ${context.servings} serving(s). I keep suggestions short due to space—ask for 'More' if you want additional options.`;
+                } else {
+                    reply = budgetNote + `\n\nHere ${final.length === 1 ? 'is 1 recipe' : `are ${final.length} recipes`} within a slightly higher range for ${context.servings} serving(s).`;
+                }
+            } else {
+                reply = budgetNote + (defaulted ? `\n\nTip: You can tell me your exact budget and servings (e.g., '$35 for 2 servings').` : '');
+            }
             context.budgetFlow = null;
             context.messages.push({ from: 'bot', text: reply });
             return { reply, recipes: final, context };
@@ -1470,7 +1491,7 @@ async function handleBudgetFlow(message, context, data) {
         }
     }
 
-    const reply = "Let's start over—tap Budget Planner again and tell me a budget like '$15 for 2 servings'.";
+    const reply = "Let's start over—tap Budget Planner again and tell me a budget like '$35 for 2 servings'.";
     context.budgetFlow = null;
     context.messages.push({ from: 'bot', text: reply });
     return { reply, recipes: [], context };
@@ -1973,6 +1994,32 @@ async function processMessage(message, data, context = {}) {
         });
         debug('Initial context:', context);
 
+        // Basic validation to align with API contract and tests
+        if (typeof message !== 'string') {
+            // Undefined/null/non-string should throw per tests
+            throw new Error('message required');
+        }
+        if (message.trim() === '') {
+            // Handle empty string gracefully instead of throwing
+            const safeReply = "Hi! Ask me about food, nutrition, or recipes—try 'give me dinner ideas' or tap a quick option.";
+            const safeContext = (!context || typeof context !== 'object') ? {} : context;
+            safeContext.messages = safeContext.messages || [];
+            safeContext.seenRecipes = safeContext.seenRecipes || new Set();
+            safeContext.messages.push({ from: 'bot', text: safeReply });
+            return { reply: safeReply, recipes: [], context: safeContext };
+        }
+
+        // Validate context; tests expect an error for malformed (e.g., null) context
+        if (!context || typeof context !== 'object') {
+            throw new Error('invalid context');
+        }
+
+        // Support a simple reset command to clear any stuck flows/session state
+        if (message.trim().toLowerCase() === 'reset') {
+            const fresh = { messages: [], seenRecipes: new Set() };
+            return { reply: 'Session reset. How can I help with food or nutrition today?', recipes: [], context: fresh };
+        }
+
         // Initialize context - convert seenRecipes array back to Set if needed
         if (Array.isArray(context.seenRecipes)) {
             context.seenRecipes = new Set(context.seenRecipes);
@@ -2023,7 +2070,40 @@ async function processMessage(message, data, context = {}) {
         // ============================================================
         // SPECIAL INTERACTIVE FEATURES
         // ============================================================
+
+        // Soft-cancel stale flows when the user clearly changes topic
+        // This prevents getting stuck in a flow (e.g., Time Saver asking for minutes) for unrelated questions
+        try {
+            // If Time Saver is awaiting minutes but the user clearly changed topic, exit the flow.
+            // Keep the flow active for time-related phrasing like "quick", "under 20", "minutes".
+            if (context.timeFlow === 'awaiting_minutes') {
+                const txt = String(message || '');
+                const timeLike = /(min(s|utes)?|minute|under|quick|quickly|fast|time|\d+)/i.test(txt);
+                if (!timeLike) {
+                    delete context.timeFlow;
+                    delete context.minutes;
+                }
+            }
+        } catch (e) {
+            warn('Flow soft-cancel check failed:', e?.message || e);
+        }
         
+        // Quick-detect: if the user message looks like a budget request (e.g., "$35 for 2"),
+        // route it through the Budget Planner for proper recipe cards instead of a generic reply.
+        try {
+            if (!context.budgetFlow) {
+                const text = String(message || '');
+                const hasCurrencyCue = /\$|dollars?|budget/i.test(text);
+                if (hasCurrencyCue) {
+                    const quickBudget = parseBudgetAndServings(text);
+                    if (Number.isFinite(quickBudget?.budget)) {
+                        context.budgetFlow = 'awaiting_budget';
+                        return await handleBudgetFlow(message, context, data);
+                    }
+                }
+            }
+        } catch {}
+
         // Nutrition Coach Flow
         if (message === '__NUTRITION_START__' || context.nutritionFlow) {
             return await handleNutritionFlow(message, context, data);
@@ -2515,16 +2595,15 @@ async function processMessage(message, data, context = {}) {
                     enriched = under;
                     debug(`Budget cap filter ($${budgetCap}) kept ${enriched.length}/${before} recipes`);
                 } else {
-                    // No recipes under the cap; show none, and prepare a helpful note with closest options
-                    const closest = sortByCheapest(enriched).slice(0, 3);
-                    if (closest.length > 0) {
-                        const lines = closest.map(r => `• ${r.name} — ~$${estimateRecipeCost(r).toFixed(2)}`).join('\n');
-                        budgetNote = `\n\nI couldn't find recipes strictly under $${budgetCap} with current prices. Here are the closest options (slightly over):\n${lines}\n\nReply like 'relax to $${Math.ceil(budgetCap + 2)}' to expand the cap.`;
-                        // We will still return the closest options but clearly labeled as above budget
-                        enriched = closest;
+                    // Try doubling the cap as a smart fallback
+                    const doubledCap = budgetCap * 2;
+                    const withinDouble = filterRecipesByBudget(sortByCheapest(enriched), doubledCap).slice(0, 3);
+                    if (withinDouble.length > 0) {
+                        enriched = withinDouble;
+                        budgetNote = `\n\nI couldn't find any recipes within $${budgetCap}, so I slightly increased the range to show you these options. If these don't work, try reducing servings or increasing your budget.`;
                     } else {
-                        budgetNote = `\n\nI couldn't find any recipes close to this budget using current prices.`;
                         enriched = [];
+                        budgetNote = `\n\nI couldn't find any recipes within $${budgetCap}, even with a slightly increased range. Try increasing your budget or reducing servings.`;
                     }
                 }
             }
@@ -2621,7 +2700,7 @@ async function processMessage(message, data, context = {}) {
  * Detect if the user's message is asking about products/ingredients
  */
 function detectProductQuery(message) {
-    const msg = message.toLowerCase();
+    const msg = String(message || '').toLowerCase();
     
     // Direct product queries
     const productKeywords = [
