@@ -1919,6 +1919,180 @@ Be encouraging and gentle, not preachy!`;
 }
 
 // ============================================================
+// MINDFUL MORSels FLOW
+// Short wellness-focused micro-moments with optional fact + source
+// ============================================================
+async function generateMindfulMoment(context) {
+    try {
+        const prompt = `Mindful Morsels: Generate a short, practical wellness micro-moment related to food, cooking, nutrition, or mindful eating.
+
+Format exactly as plain text (no code fences, no headings beyond those specified):
+1) A concise micro-moment (2–4 short lines). Keep it calming, encouraging, and concrete.
+2) Blank line.
+3) **Why it matters:** one short sentence (or two max) explaining the benefit.
+4) Optionally, if and only if you have a specific, relevant, evidence-based fact: on a new paragraph add
+   **Did you know?:** <short fact>.
+
+Rules:
+- Keep it simple and actionable; avoid jargon.
+- Use bold exactly for "Why it matters:" and optionally "Did you know?:".
+- Only include "Did you know?" when the fact directly supports the micro-moment.
+- Do NOT include any links or sources.
+- Do not ask the follow-up question; the app will append that.
+`;
+
+        const content = await chatWithOllama(prompt, context.messages?.slice(-6) || []);
+        // Normalize and strip any accidental code fences
+        let text = stripCodeFences(content || '').trim();
+    // Remove any accidental Source lines and URLs to ensure no links are shown
+    text = text.replace(/^.*Source\s*:\s*.*$/gmi, '');
+        // Strip bare http/https URLs anywhere in the text
+        text = text.replace(/https?:\/\/[^\s)]+/gmi, '').replace(/\(\s*\)/g, '');
+        // Collapse excessive blank lines
+        text = text.replace(/\n{3,}/g, '\n\n').trim();
+        return text;
+    } catch (e) {
+        warn('Mindful moment generation error:', e?.message || e);
+        return "Take one slow breath in, one slow breath out. Notice the smell and texture of your next bite before you taste it.\n\n**Why it matters:** Slowing down heightens satisfaction and can help you feel full with less.";
+    }
+}
+
+async function handleMindfulFlow(message, context, data) {
+    debug('handleMindfulFlow called. Message:', message, 'State:', context.mindfulFlow);
+
+    // Always reset on trigger
+    if (message === '__MINDFUL_START__') {
+        delete context.mindfulFlow;
+    }
+
+    const normalized = String(message || '').trim().toLowerCase();
+
+    // First entry: generate a moment
+    if (!context.mindfulFlow) {
+        context.mindfulFlow = 'awaiting_confirm';
+        const body = await generateMindfulMoment(context);
+        const reply = `${body}\n\nWould you like another mindful moment? (yes/no)`;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // Handle yes/no continuation
+    const yesSet = new Set(['yes','y','sure','ok','okay','another','more']);
+    const noSet = new Set(['no','n','nope','nah']);
+
+    if (noSet.has(normalized)) {
+        const reply = "No problem. Whenever you're ready, tap 🪷 Mindful Morsels for another, or type Reset to start fresh.";
+        context.mindfulFlow = null;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (yesSet.has(normalized)) {
+        context.mindfulFlow = 'awaiting_confirm';
+        const body = await generateMindfulMoment(context);
+        const reply = `${body}\n\nWould you like another mindful moment? (yes/no)`;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    // For other inputs while in the flow, just serve another gentle moment
+    const body = await generateMindfulMoment(context);
+    const reply = `${body}\n\nWould you like another mindful moment? (yes/no)`;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+// ============================================================
+// DID YOU KNOW (DYK) FLOW
+// Playful bite-sized curiosities about food, nutrition, culture, or science
+// ============================================================
+async function generateDidYouKnowMoment(context) {
+    try {
+    const prompt = `Produce a playful, snackable set of food curiosities.
+
+Output format:
+1) One short opener line that sets a fun tone (e.g., “Let’s feed your brain a snack 😋 — here are a couple of tasty facts:”).
+2) A blank line.
+3) Then 2–3 emoji-bullet lines (e.g., 🥕, 🍞), each 1–2 short sentences: a surprising fact + a tiny extra detail or why it’s interesting/useful.
+
+Rules:
+- Conversational, witty, and delightful; no numbering, just emoji bullets.
+- Keep each bullet compact (1–2 short sentences), but add a bit of context to keep it engaging.
+- Do NOT add questions or follow-ups; the app will append those.
+- No links, no sources, no code fences.
+
+Examples of tone (don’t copy verbatim):
+- “🥕 Carrots were once purple—orange took off in the 1600s. Farmers bred them that way to honor the Dutch House of Orange.”
+- “🍞 Sourdough starters can live for decades—bakeries pass them down like heirlooms. A mature starter adds tang and resilience.”`;
+
+        const content = await chatWithOllama(prompt, context.messages?.slice(-6) || []);
+        let text = stripCodeFences(content || '').trim();
+        // Remove any accidental source/links
+        text = text.replace(/^.*Source\s*:\s*.*$/gmi, '');
+        text = text.replace(/https?:\/\/[^\s)]+/gmi, '').replace(/\(\s*\)/g, '');
+        text = text.replace(/\n{3,}/g, '\n\n').trim();
+        // Rebuild as: opener, blank line, up to 3 bullets
+        const lines = text.split(/\n+/).map(l => l.trim());
+        const nonEmpty = lines.filter(Boolean);
+        const opener = nonEmpty.shift() || '';
+        const emojiBulletRe = /^(🥕|🍞|🍚|🍜|🍣|🍫|🍯|🍋|🍇|🍉|🍒|🍑|🍍|🥑|🌶️|🧄|🧅|🥔|🥐|🍎|🧀)\b/;
+        let bullets = nonEmpty.filter(l => emojiBulletRe.test(l) || /^[•\-–—]\s/.test(l));
+        if (bullets.length === 0 && nonEmpty.length > 0) {
+            bullets = nonEmpty;
+        }
+        const keptBullets = bullets.slice(0, 3);
+        const result = keptBullets.length > 0
+            ? `${opener}\n\n${keptBullets.join('\n\n')}`
+            : opener;
+        return result;
+    } catch (e) {
+        warn('DYK generation error:', e?.message || e);
+        return "Let’s feed your brain a snack 😋 — here are a couple of tasty facts:\n🥕 Carrots were once purple—orange took off in the 1600s.\n🍯 Honey never spoils—sealed jars found in ancient tombs were still edible.";
+    }
+}
+
+async function handleDidYouKnowFlow(message, context, data) {
+    debug('handleDidYouKnowFlow called. Message:', message, 'State:', context.dykFlow);
+
+    if (message === '__DYK_START__') {
+        delete context.dykFlow;
+    }
+
+    const normalized = String(message || '').trim().toLowerCase();
+
+    if (!context.dykFlow) {
+        context.dykFlow = 'awaiting_confirm';
+        const body = await generateDidYouKnowMoment(context);
+        const reply = `${body}\n\nWant another one? (yes/no)`;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    const yesSet = new Set(['yes','y','sure','ok','okay','another','more']);
+    const noSet = new Set(['no','n','nope','nah']);
+
+    if (noSet.has(normalized)) {
+        const reply = "All right! Tap 🪄 Did You Know? anytime for another brain snack—or type Reset to start fresh.";
+        context.dykFlow = null;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    if (yesSet.has(normalized)) {
+        context.dykFlow = 'awaiting_confirm';
+        const body = await generateDidYouKnowMoment(context);
+        const reply = `${body}\n\nWant another one? (yes/no)`;
+        context.messages.push({ from: 'bot', text: reply });
+        return { reply, recipes: [], context };
+    }
+
+    const body = await generateDidYouKnowMoment(context);
+    const reply = `${body}\n\nWant another one? (yes/no)`;
+    context.messages.push({ from: 'bot', text: reply });
+    return { reply, recipes: [], context };
+}
+
+// ============================================================
 // DAILY MENU FLOW
 // Provides a complete daily meal plan: breakfast, lunch, and dinner
 // ============================================================
@@ -2034,7 +2208,7 @@ async function processMessage(message, data, context = {}) {
         // ============================================================
         // FLOW RESET: Clear other flows when a new trigger is detected
         // ============================================================
-        const triggers = ['__NUTRITION_START__', '__BUDGET_START__', '__TIME_START__', '__PANTRY_START__', '__MEAL_PREP_START__', '__HEALTHY_START__', '__DAILY_MENU_START__'];
+    const triggers = ['__NUTRITION_START__', '__BUDGET_START__', '__TIME_START__', '__PANTRY_START__', '__MEAL_PREP_START__', '__HEALTHY_START__', '__DAILY_MENU_START__', '__MINDFUL_START__', '__DYK_START__'];
         if (triggers.includes(message)) {
             debug('Detected flow trigger:', message, '- Clearing all other flow states');
             // Clear all flow states except the one being triggered
@@ -2064,6 +2238,12 @@ async function processMessage(message, data, context = {}) {
             }
             if (message !== '__DAILY_MENU_START__') {
                 delete context.dailyMenuFlow;
+            }
+            if (message !== '__MINDFUL_START__') {
+                delete context.mindfulFlow;
+            }
+            if (message !== '__DYK_START__') {
+                delete context.dykFlow;
             }
         }
 
@@ -2134,6 +2314,18 @@ async function processMessage(message, data, context = {}) {
         if (message === '__HEALTHY_START__' || context.healthyFlow) {
             debug('Healthy Options Flow triggered. Message:', message, 'Flow state:', context.healthyFlow);
             return await handleHealthyFlow(message, context, data);
+        }
+
+        // Mindful Morsels Flow
+        if (message === '__MINDFUL_START__' || context.mindfulFlow) {
+            debug('Mindful Morsels Flow triggered. Message:', message, 'Flow state:', context.mindfulFlow);
+            return await handleMindfulFlow(message, context, data);
+        }
+
+        // Did You Know Flow
+        if (message === '__DYK_START__' || context.dykFlow) {
+            debug('Did You Know Flow triggered. Message:', message, 'Flow state:', context.dykFlow);
+            return await handleDidYouKnowFlow(message, context, data);
         }
 
         // Daily Menu Flow

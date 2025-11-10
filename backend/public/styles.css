@@ -492,6 +492,24 @@ textarea.input::-webkit-scrollbar { width: 0; height: 0; }
   cursor: not-allowed;
 }
 
+/* Mindful Morsels button - soft purple/lavender theme */
+.btn-mindful {
+  border: 1px solid color-mix(in oklab, #9b59b6 30%, var(--border)) !important;
+  background: color-mix(in oklab, #9b59b6 18%, var(--surface)) !important;
+  box-shadow: 0 2px 8px rgba(155, 89, 182, 0.12) !important;
+}
+
+.btn-mindful:hover:not(:disabled) {
+  background: color-mix(in oklab, #9b59b6 34%, var(--surface)) !important;
+  border-color: color-mix(in oklab, #9b59b6 60%, var(--border)) !important;
+  box-shadow: 0 6px 14px rgba(155, 89, 182, 0.24) !important;
+}
+
+.btn-mindful:active:not(:disabled) {
+  background: color-mix(in oklab, #9b59b6 26%, var(--surface)) !important;
+  box-shadow: 0 2px 6px rgba(155, 89, 182, 0.12) !important;
+}
+
 .btn-qty {
   width: 28px;
   height: 28px;

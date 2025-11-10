@@ -204,6 +204,8 @@ function Chat({onAddToList}){
     { label: '⏱️ Time Saver', query: '__TIME_START__' },
     { label: '🧺 Pantry Helper', query: '__PANTRY_START__' },
     { label: '🌿 Healthy Options', query: '__HEALTHY_START__' },
+      { label: '🪷 Mindful Morsels', query: '__MINDFUL_START__' },
+      { label: '🪄 Did You Know?', query: '__DYK_START__' },
   ];
 
   useEffect(() => {
@@ -341,6 +343,8 @@ function Chat({onAddToList}){
         const marked = String(cellText).replace(/\*\*(.+?)\*\*/g, '§§B§§$1§§/B§§');
         // Escape everything
         let esc = escapeHtml(marked);
+        // Autolink bare URLs in cells
+        esc = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1<\/a>');
         // Restore bold tags safely
         esc = esc.replace(/§§B§§/g, '<strong>').replace(/§§\/B§§/g, '</strong>');
         return esc;
@@ -405,9 +409,12 @@ function Chat({onAddToList}){
     const parts = convertTablesToHtml(raw);
     const html = parts.map(p => {
       if (p.type === 'html') return p.content; // already safe-escaped per cell
-      const safe = escapeHtml(p.content);
+      let safe = escapeHtml(p.content);
+      // Autolink bare URLs
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      let withLinks = safe.replace(urlRegex, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
       // More robust bold detection: support **bold** and __bold__, including across line breaks
-      const withBold = safe
+      const withBold = withLinks
         .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
         .replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
       return withBold.replace(/\n/g, '<br/>');
@@ -623,16 +630,41 @@ function Chat({onAddToList}){
           <div style={{marginBottom:12}}>
             <p style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:8, fontWeight:500}}>Quick suggestions:</p>
             <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
-              {quickOptions.map((opt, i) => (
-                <button
-                  key={i}
-                  className="btn btn-ghost btn-small quick-option-btn"
-                  onClick={() => handleQuickOption(opt.query)}
-                  disabled={isLoading}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {(() => {
+                const special = new Set(['__MINDFUL_START__','__DYK_START__']);
+                const primaryOpts = quickOptions.filter(o => !special.has(o.query));
+                const specialOpts = quickOptions.filter(o => special.has(o.query));
+
+                return (
+                  <>
+                    {primaryOpts.map((opt, i) => (
+                      <button
+                        key={`p-${i}`}
+                        className={`btn btn-ghost btn-small quick-option-btn${(opt.query === '__MINDFUL_START__' || opt.query === '__DYK_START__') ? ' btn-mindful' : ''}`}
+                        onClick={() => handleQuickOption(opt.query)}
+                        disabled={isLoading}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+
+                    {specialOpts.length > 0 && (
+                      <div style={{display:'flex', flexWrap:'nowrap', gap:'8px'}}>
+                        {specialOpts.map((opt, i) => (
+                          <button
+                            key={`s-${i}`}
+                            className={`btn btn-ghost btn-small quick-option-btn btn-mindful`}
+                            onClick={() => handleQuickOption(opt.query)}
+                            disabled={isLoading}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
