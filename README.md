@@ -30,7 +30,7 @@ This AI-powered grocery assistant provides:
 
 ## ✨ Key Features
 
-### 🤖 **7 Specialized AI Assistants**
+### 🤖 **9 Specialized AI Assistants**
 
 1. **💰 Budget Planner** - Strict budget filtering for recipes under your price cap
 2. **⏰ Quick Recipes** - Find meals based on available cooking time
@@ -39,6 +39,8 @@ This AI-powered grocery assistant provides:
 5. **🍽️ Meal Prep Planner** - Generate full-day menus (breakfast/lunch/dinner)
 6. **💚 Healthy Options** - Smart nutrition swaps and mindful eating guidance
 7. **📅 Full Day Menu** - Complete daily meal plans
+8. **🪷 Mindful Morsels** - Wellness micro-moments for mindful eating practices
+9. **🪄 Did You Know?** - Playful, educational food curiosities and fun facts
 
 ### 🛍️ **Smart Shopping Features**
 
@@ -55,6 +57,7 @@ This AI-powered grocery assistant provides:
 - **Multi-format Input** - Handles various ways to express budgets, time, ingredients
 - **Flow State Management** - Seamlessly switch between different assistance modes
 - **LLM Integration** - Powered by Ollama (gpt-oss:120b-cloud model)
+- **Interactive Micro-Features** - Mindful eating moments and food curiosities with yes/no continuation
 
 ---
 
@@ -257,9 +260,49 @@ User: "2"
 AI: [Returns 3 vegetarian recipes: breakfast, lunch, dinner]
 ```
 
+### **Mindful Eating Moments**
+```
+User: [Clicks "🪷 Mindful Morsels"]
+AI: [Shares a calming micro-moment about mindful eating]
+    [Includes bold "Why it matters:" explanation]
+    [Sometimes adds "Did you know?" fact]
+    "Would you like another mindful moment? (yes/no)"
+User: "yes"
+AI: [Generates a new mindful practice]
+```
+
+### **Food Curiosities**
+```
+User: [Clicks "🪄 Did You Know?"]
+AI: "Let's feed your brain a snack 😋 — here are a few tasty facts:"
+    🥕 [Surprising fact about food + extra context]
+    🍞 [Another fun fact with details]
+    🥑 [Third curiosity with interesting info]
+    "Want another one? (yes/no)"
+User: "yes"
+AI: [Generates new set of food facts]
+```
+
 ---
 
 ## 🎨 Features in Detail
+
+### **Mindful Morsels (Wellness Micro-Moments)**
+- Provides short, calming mindful eating practices (2-4 lines)
+- Includes bold **"Why it matters:"** explanation
+- Occasionally adds **"Did you know?"** facts when relevant
+- Yes/no continuation for multiple moments
+- All output sanitized (no links or sources)
+- Helps build healthier eating habits through gentle guidance
+
+### **Did You Know? (Food Curiosities)**
+- Generates 2-3 playful, educational food facts per tap
+- Each fact includes extra context for engagement (1-2 sentences)
+- Emoji bullets for visual appeal (🥕, 🍞, 🥑, etc.)
+- Proper spacing between facts for readability
+- Yes/no continuation for more curiosities
+- All output sanitized (no links or sources)
+- Topics cover nutrition, food science, culture, and history
 
 ### **Budget Filtering (Strict Implementation)**
 - Parses budget in multiple formats: "$20", "under $15", "$25 for 4 servings"
@@ -340,12 +383,14 @@ npm test -- --coverage
 
 - **2,600+ lines** of core AI logic in `chatLogic.js`
 - **95 comprehensive tests** ensuring reliability
-- **7 distinct interactive flows** with state management
+- **9 distinct interactive flows** with state management
 - **Session-based architecture** for multi-turn conversations
 - **Intelligent scoring algorithms** for recipe relevance
 - **Strict budget filtering** with cost estimation
 - **BMR/TDEE calculations** for nutrition coaching
 - **Natural language parsing** for flexible input formats
+- **Content sanitization** for wellness features (URL/source removal)
+- **Dynamic LLM-generated content** for mindful moments and food facts
 
 ---
 
